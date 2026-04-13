@@ -35,6 +35,9 @@ Currently configured (All Environments):
 - `ANTHROPIC_API_KEY` - Server-side Anthropic API key for Claude models
 - `DEFAULT_MODEL` - Set to `anthropic:claude-sonnet-4-6`
 
+Currently configured (Production only):
+- `TTS_ELEVENLABS_API_KEY` - ElevenLabs API key for text-to-speech (Flash v2.5 model, default voice: Sarah)
+
 To manage: Vercel Dashboard > asu-ai-classroom > Settings > Environment Variables
 
 ## ASU Branding

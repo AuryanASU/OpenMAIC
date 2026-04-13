@@ -848,7 +848,7 @@ export const TTS_PROVIDERS: Record<BuiltInTTSProviderId, TTSProviderConfig> = {
       { id: 'eleven_flash_v2_5', name: 'Flash v2.5' },
       { id: 'eleven_flash_v2', name: 'Flash v2' },
     ],
-    defaultModelId: 'eleven_multilingual_v2',
+    defaultModelId: 'eleven_flash_v2_5',
     // Free-tier-safe fallback set; account-specific/custom voices should come from /v2/voices dynamically later.
     voices: [
       {
