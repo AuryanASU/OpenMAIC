@@ -395,7 +395,7 @@ function AIChatPanel({
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const modelId = useSettingsStore((s) => s.modelId);
-  const modelConfig = useSettingsStore((s) => s.modelConfig);
+  const modelConfig = useSettingsStore((s) => s.providersConfig[s.providerId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
