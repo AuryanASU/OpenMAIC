@@ -166,7 +166,15 @@ pnpm build
 
 # Lint
 pnpm lint
+
+# Format check (CI runs this — always run before pushing)
+pnpm check
+
+# Auto-fix formatting
+npx prettier . --write
 ```
+
+> **Important:** CI runs Prettier via `pnpm check`. Always run it before pushing to avoid formatting failures.
 
 ## Pulling Upstream Updates
 
