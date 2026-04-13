@@ -10,7 +10,7 @@
 
 import { NextRequest } from 'next/server';
 import { streamLLM } from '@/lib/ai/llm';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 import { isProviderKeyRequired } from '@/lib/ai/providers';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
@@ -123,11 +123,7 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: topic');
     }
 
-    const { model, apiKey, providerId } = await resolveModel({
-      modelString: body.model,
-      apiKey: body.apiKey,
-      baseUrl: body.baseUrl,
-    });
+    const { model, apiKey, providerId } = await resolveModelFromHeaders(req);
 
     if (isProviderKeyRequired(providerId) && !apiKey) {
       return apiError('MISSING_API_KEY', 401, 'API Key is required');

@@ -272,16 +272,12 @@ function HomePage() {
     setSyllabusLoading(true);
 
     try {
-      const settings = useSettingsStore.getState();
       const res = await fetch('/api/generate-syllabus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: form.requirement.trim(),
           language: form.language,
-          model: settings.modelId,
-          apiKey: settings.providersConfig[settings.providerId]?.apiKey,
-          baseUrl: settings.providersConfig[settings.providerId]?.baseUrl,
         }),
       });
 
@@ -334,12 +330,8 @@ function HomePage() {
     setSyllabusFile(file);
 
     try {
-      const settings = useSettingsStore.getState();
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('model', settings.modelId ?? '');
-      if (settings.providersConfig[settings.providerId]?.apiKey) formData.append('apiKey', settings.providersConfig[settings.providerId].apiKey);
-      if (settings.providersConfig[settings.providerId]?.baseUrl) formData.append('baseUrl', settings.providersConfig[settings.providerId].baseUrl);
 
       const res = await fetch('/api/parse-syllabus', { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Server error ${res.status}`);

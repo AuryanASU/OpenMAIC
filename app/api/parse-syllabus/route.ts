@@ -10,7 +10,7 @@
 
 import { NextRequest } from 'next/server';
 import { callLLM } from '@/lib/ai/llm';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
 import { isProviderKeyRequired } from '@/lib/ai/providers';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
@@ -110,9 +110,6 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
-    const modelString = formData.get('model') as string | null;
-    const apiKeyParam = formData.get('apiKey') as string | null;
-    const baseUrlParam = formData.get('baseUrl') as string | null;
     const originalFileName = file?.name;
 
     if (!file) {
@@ -124,11 +121,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve model
-    const { model, apiKey, providerId } = await resolveModel({
-      modelString: modelString ?? undefined,
-      apiKey: apiKeyParam ?? undefined,
-      baseUrl: baseUrlParam ?? undefined,
-    });
+    const { model, apiKey, providerId } = await resolveModelFromHeaders(req);
 
     if (isProviderKeyRequired(providerId) && !apiKey) {
       return apiError('MISSING_API_KEY', 401, 'API Key is required');
