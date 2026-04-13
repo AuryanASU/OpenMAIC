@@ -11,6 +11,30 @@ export interface PresetTheme {
 }
 
 export const PRESET_THEMES: PresetTheme[] = [
+  // ASU Light — clean white with maroon & gold accents
+  {
+    background: '#ffffff',
+    fontColor: '#1a1a2e',
+    borderColor: '#8C1D40',
+    fontname: '',
+    colors: ['#8C1D40', '#FFC627', '#78BE20', '#00A3E0', '#5C6670', '#FF7F32'],
+  },
+  // ASU Warm — subtle warm background with maroon highlights
+  {
+    background: '#faf8f5',
+    fontColor: '#2d2024',
+    borderColor: '#8C1D40',
+    fontname: '',
+    colors: ['#8C1D40', '#FFC627', '#E87722', '#00A3E0', '#78BE20', '#AB0520'],
+  },
+  // ASU Dark — deep maroon background, gold & light text
+  {
+    background: '#2d1525',
+    fontColor: '#f5f0eb',
+    borderColor: '#FFC627',
+    fontname: '',
+    colors: ['#FFC627', '#C75B7A', '#78BE20', '#00A3E0', '#FF7F32', '#f5f0eb'],
+  },
   {
     background: '#ffffff',
     fontColor: '#333333',

@@ -149,7 +149,7 @@ export function WhiteboardHistory({ isOpen, onClose }: WhiteboardHistoryProps) {
                         type="button"
                         onClick={() => handleRestore(realIdx)}
                         disabled={isClearing}
-                        className="ml-2 px-2 py-1 text-xs text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        className="ml-2 px-2 py-1 text-xs text-[#8C1D40] dark:text-[#C75B7A] hover:bg-[#8C1D40]/10 dark:hover:bg-[#C75B7A]/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                       >
                         <RotateCcw className="w-3 h-3" />
                         {t('whiteboard.restore')}

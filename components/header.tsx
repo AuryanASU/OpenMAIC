@@ -122,7 +122,7 @@ export function Header({ currentSceneTitle }: HeaderProps) {
                   className={cn(
                     'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                     theme === 'light' &&
-                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                      'bg-[#8C1D40]/10 dark:bg-[#C75B7A]/20 text-[#8C1D40] dark:text-[#C75B7A]',
                   )}
                 >
                   <Sun className="w-4 h-4" />
@@ -136,7 +136,7 @@ export function Header({ currentSceneTitle }: HeaderProps) {
                   className={cn(
                     'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                     theme === 'dark' &&
-                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                      'bg-[#8C1D40]/10 dark:bg-[#C75B7A]/20 text-[#8C1D40] dark:text-[#C75B7A]',
                   )}
                 >
                   <Moon className="w-4 h-4" />
@@ -150,7 +150,7 @@ export function Header({ currentSceneTitle }: HeaderProps) {
                   className={cn(
                     'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                     theme === 'system' &&
-                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                      'bg-[#8C1D40]/10 dark:bg-[#C75B7A]/20 text-[#8C1D40] dark:text-[#C75B7A]',
                   )}
                 >
                   <Monitor className="w-4 h-4" />

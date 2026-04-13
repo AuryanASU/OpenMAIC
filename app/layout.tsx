@@ -18,9 +18,9 @@ const inter = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'OpenMAIC',
+  title: 'ASU AI Classroom',
   description:
-    'The open-source AI interactive classroom. Upload a PDF to instantly generate an immersive, multi-agent learning experience.',
+    'Arizona State University AI-powered interactive classroom. Generate immersive, multi-agent learning experiences from your course materials.',
 };
 
 export default function RootLayout({

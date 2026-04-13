@@ -18,6 +18,9 @@ import {
   Monitor,
   BotOff,
   ChevronUp,
+  BookOpen,
+  FlaskConical,
+  BarChart3,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -65,7 +68,7 @@ interface FormState {
 const initialFormState: FormState = {
   pdfFile: null,
   requirement: '',
-  language: 'zh-CN',
+  language: 'en-US',
   webSearch: false,
 };
 
@@ -330,7 +333,7 @@ function HomePage() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center p-4 pt-16 md:p-8 md:pt-16 overflow-x-hidden">
+    <div className="min-h-[100dvh] w-full bg-gradient-to-b from-stone-50 to-stone-100 dark:from-stone-950 dark:to-stone-900 flex flex-col items-center p-4 pt-16 md:p-8 md:pt-16 overflow-x-hidden">
       {/* ═══ Top-right pill (unchanged) ═══ */}
       <div
         ref={toolbarRef}
@@ -363,7 +366,7 @@ function HomePage() {
                 className={cn(
                   'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                   theme === 'light' &&
-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                    'bg-[#8C1D40]/10 dark:bg-[#8C1D40]/20 text-[#8C1D40] dark:text-[#C75B7A]',
                 )}
               >
                 <Sun className="w-4 h-4" />
@@ -377,7 +380,7 @@ function HomePage() {
                 className={cn(
                   'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                   theme === 'dark' &&
-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                    'bg-[#8C1D40]/10 dark:bg-[#8C1D40]/20 text-[#8C1D40] dark:text-[#C75B7A]',
                 )}
               >
                 <Moon className="w-4 h-4" />
@@ -391,7 +394,7 @@ function HomePage() {
                 className={cn(
                   'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                   theme === 'system' &&
-                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                    'bg-[#8C1D40]/10 dark:bg-[#8C1D40]/20 text-[#8C1D40] dark:text-[#C75B7A]',
                 )}
               >
                 <Monitor className="w-4 h-4" />
@@ -425,11 +428,11 @@ function HomePage() {
       {/* ═══ Background Decor ═══ */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"
+          className="absolute top-0 left-1/4 w-96 h-96 bg-[#8C1D40]/8 rounded-full blur-3xl animate-pulse"
           style={{ animationDuration: '4s' }}
         />
         <div
-          className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse"
+          className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#FFC627]/8 rounded-full blur-3xl animate-pulse"
           style={{ animationDuration: '6s' }}
         />
       </div>
@@ -446,8 +449,8 @@ function HomePage() {
       >
         {/* ── Logo ── */}
         <motion.img
-          src="/logo-horizontal.png"
-          alt="OpenMAIC"
+          src="/asu-logo.svg"
+          alt="ASU AI Classroom"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{
@@ -456,7 +459,7 @@ function HomePage() {
             stiffness: 200,
             damping: 20,
           }}
-          className="h-12 md:h-16 mb-2 -ml-2 md:-ml-3"
+          className="h-10 md:h-12 mb-2"
         />
 
         {/* ── Slogan ── */}
@@ -476,7 +479,7 @@ function HomePage() {
           transition={{ delay: 0.35 }}
           className="w-full"
         >
-          <div className="w-full rounded-2xl border border-border/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-black/[0.03] dark:shadow-black/20 transition-shadow focus-within:shadow-2xl focus-within:shadow-violet-500/[0.06]">
+          <div className="w-full rounded-2xl border border-border/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-black/[0.03] dark:shadow-black/20 transition-shadow focus-within:shadow-2xl focus-within:shadow-[#8C1D40]/[0.06]">
             {/* ── Greeting + Profile + Agents ── */}
             <div className="relative z-20 flex items-start justify-between">
               <GreetingBar />
@@ -559,6 +562,64 @@ function HomePage() {
         </AnimatePresence>
       </motion.div>
 
+      {/* ═══ ASU Course Quick-Starts ═══ */}
+      {classrooms.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55 }}
+          className="relative z-10 mt-10 w-full max-w-[800px]"
+        >
+          <p className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider mb-4 text-center">
+            Quick Start — ASU Courses
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              {
+                icon: <BookOpen className="size-4" />,
+                title: 'Introduction to Data Science',
+                desc: 'Fundamentals of data analysis, Python, and statistical thinking for ASU undergraduates.',
+                prompt: 'Create a comprehensive introductory course on Data Science for undergraduate students at Arizona State University. Cover: what is data science, the data science lifecycle, Python basics for data analysis (pandas, numpy), exploratory data analysis and visualization, basic statistics and probability, intro to machine learning concepts, and ethical considerations in data science. Include interactive quizzes, hands-on coding exercises, and real-world ASU research examples. Target 8-10 lessons.',
+              },
+              {
+                icon: <FlaskConical className="size-4" />,
+                title: 'Sustainability & Innovation',
+                desc: 'Exploring sustainable solutions through innovation, design thinking, and systems analysis.',
+                prompt: 'Create an engaging course on Sustainability and Innovation for Arizona State University students. Cover: introduction to sustainability science, the UN Sustainable Development Goals, systems thinking for environmental challenges, design thinking for sustainable solutions, renewable energy technologies, circular economy principles, sustainable urban planning, measuring environmental impact, innovation frameworks for sustainability startups, and case studies from ASU research initiatives. Include interactive discussions, project-based learning activities, and quizzes. Target 8-10 lessons.',
+              },
+              {
+                icon: <BarChart3 className="size-4" />,
+                title: 'Business Analytics Essentials',
+                desc: 'Data-driven decision making with analytics tools, dashboards, and strategic frameworks.',
+                prompt: 'Create a professional course on Business Analytics Essentials for ASU W. P. Carey School of Business students. Cover: introduction to business analytics and its role in decision-making, data collection and quality assessment, descriptive analytics and KPI dashboards, data visualization best practices, predictive analytics fundamentals, A/B testing and experimentation, customer analytics and segmentation, supply chain analytics, financial analytics basics, and communicating insights to stakeholders. Include case studies from real companies, interactive exercises, and quizzes. Target 8-10 lessons.',
+              },
+            ].map((course, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setForm((prev) => ({ ...prev, requirement: course.prompt }));
+                  updateRequirementCache(course.prompt);
+                  textareaRef.current?.focus();
+                }}
+                className="group text-left p-4 rounded-xl border border-border/50 bg-white/60 dark:bg-slate-900/40 hover:bg-white dark:hover:bg-slate-800/60 hover:border-[#8C1D40]/30 hover:shadow-md hover:shadow-[#8C1D40]/5 transition-all duration-200 cursor-pointer"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="size-7 rounded-lg bg-[#8C1D40]/10 dark:bg-[#8C1D40]/20 text-[#8C1D40] dark:text-[#C75B7A] flex items-center justify-center group-hover:bg-[#8C1D40] group-hover:text-white transition-colors">
+                    {course.icon}
+                  </div>
+                  <span className="text-sm font-semibold text-foreground/90 group-hover:text-foreground transition-colors">
+                    {course.title}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground/60 leading-relaxed">
+                  {course.desc}
+                </p>
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* ═══ Recent classrooms — collapsible ═══ */}
       {classrooms.length > 0 && (
         <motion.div
@@ -639,7 +700,7 @@ function HomePage() {
 
       {/* Footer — flows with content, at the very end */}
       <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
-        OpenMAIC Open Source Project
+        ASU AI Classroom &middot; Powered by OpenMAIC
       </div>
     </div>
   );
@@ -744,7 +805,7 @@ function GreetingBar() {
           onClick={() => setOpen(true)}
         >
           <div className="shrink-0 relative">
-            <div className="size-8 rounded-full overflow-hidden ring-[1.5px] ring-border/30 group-hover:ring-violet-400/60 dark:group-hover:ring-violet-400/40 transition-all duration-300">
+            <div className="size-8 rounded-full overflow-hidden ring-[1.5px] ring-border/30 group-hover:ring-[#8C1D40]/50 dark:group-hover:ring-[#C75B7A]/40 transition-all duration-300">
               <img src={avatar} alt="" className="size-full object-cover" />
             </div>
             <div className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-white dark:bg-slate-800 border border-border/40 flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity">

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 48" fill="none">
+  <defs>
+    <linearGradient id="pitchfork-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFC627"/>
+      <stop offset="100%" stop-color="#E5A800"/>
+    </linearGradient>
+  </defs>
+  <!-- ASU Pitchfork Icon -->
+  <g transform="translate(4, 2)">
+    <!-- Pitchfork -->
+    <path d="M18 8 L18 38" stroke="url(#pitchfork-grad)" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M10 8 L10 18 Q10 22 14 22 L18 22" stroke="url(#pitchfork-grad)" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M26 8 L26 18 Q26 22 22 22 L18 22" stroke="url(#pitchfork-grad)" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <circle cx="10" cy="6" r="2" fill="#FFC627"/>
+    <circle cx="18" cy="6" r="2" fill="#FFC627"/>
+    <circle cx="26" cy="6" r="2" fill="#FFC627"/>
+  </g>
+  <!-- "ASU" text -->
+  <text x="46" y="32" font-family="Inter, system-ui, sans-serif" font-weight="800" font-size="28" fill="#8C1D40" letter-spacing="-0.02em">ASU</text>
+  <!-- "AI Classroom" text -->
+  <text x="106" y="32" font-family="Inter, system-ui, sans-serif" font-weight="400" font-size="28" fill="currentColor" letter-spacing="-0.02em" opacity="0.7">AI Classroom</text>
+</svg>
