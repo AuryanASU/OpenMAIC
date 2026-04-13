@@ -284,8 +284,8 @@ function HomePage() {
           topic: form.requirement.trim(),
           language: form.language,
           model: settings.modelId,
-          apiKey: settings.modelConfig?.apiKey,
-          baseUrl: settings.modelConfig?.baseUrl,
+          apiKey: settings.providersConfig[settings.providerId]?.apiKey,
+          baseUrl: settings.providersConfig[settings.providerId]?.baseUrl,
         }),
       });
 
@@ -342,8 +342,8 @@ function HomePage() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('model', settings.modelId ?? '');
-      if (settings.modelConfig?.apiKey) formData.append('apiKey', settings.modelConfig.apiKey);
-      if (settings.modelConfig?.baseUrl) formData.append('baseUrl', settings.modelConfig.baseUrl);
+      if (settings.providersConfig[settings.providerId]?.apiKey) formData.append('apiKey', settings.providersConfig[settings.providerId].apiKey);
+      if (settings.providersConfig[settings.providerId]?.baseUrl) formData.append('baseUrl', settings.providersConfig[settings.providerId].baseUrl);
 
       const res = await fetch('/api/parse-syllabus', { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
