@@ -23,7 +23,6 @@ import {
   BarChart3,
   FileText,
   Upload,
-  Zap,
   Sparkles,
   Loader2,
 } from 'lucide-react';
@@ -137,7 +136,6 @@ function HomePage() {
   }
 
   // Syllabus flow
-  const [creationMode, setCreationMode] = useState<'quick' | 'syllabus-topic' | 'syllabus-upload'>('quick');
   const [syllabusLoading, setSyllabusLoading] = useState(false);
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null);
   const syllabusInputRef = useRef<HTMLInputElement>(null);
@@ -504,7 +502,7 @@ function HomePage() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      if (canGenerate) handleGenerate();
+      if (canGenerate) handleSyllabusGenerate();
     }
   };
 
@@ -664,115 +662,16 @@ function HomePage() {
               </div>
             </div>
 
-            {/* ── Creation Mode Selector ── */}
-            <div className="px-4 pt-1 pb-2 flex items-center gap-1">
-              {(
-                [
-                  {
-                    id: 'quick' as const,
-                    icon: <Zap className="size-3" />,
-                    label: 'Quick Generate',
-                  },
-                  {
-                    id: 'syllabus-topic' as const,
-                    icon: <Sparkles className="size-3" />,
-                    label: 'Design Syllabus',
-                  },
-                  {
-                    id: 'syllabus-upload' as const,
-                    icon: <Upload className="size-3" />,
-                    label: 'Upload Syllabus',
-                  },
-                ] as const
-              ).map((mode) => (
-                <button
-                  key={mode.id}
-                  onClick={() => setCreationMode(mode.id)}
-                  className={cn(
-                    'flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all',
-                    creationMode === mode.id
-                      ? 'bg-[#8C1D40] text-white shadow-sm'
-                      : 'text-muted-foreground/60 hover:text-foreground hover:bg-muted/60',
-                  )}
-                >
-                  {mode.icon}
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-
-            {/* ── Syllabus upload drop area ── */}
-            {creationMode === 'syllabus-upload' && (
-              <div className="mx-4 mb-2">
-                <input
-                  ref={syllabusInputRef}
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleSyllabusUpload(file);
-                    e.target.value = '';
-                  }}
-                />
-                <button
-                  onClick={() => syllabusInputRef.current?.click()}
-                  disabled={syllabusLoading}
-                  className={cn(
-                    'w-full rounded-xl border-2 border-dashed py-6 flex flex-col items-center justify-center gap-2 transition-all',
-                    syllabusLoading
-                      ? 'border-[#8C1D40]/30 bg-[#8C1D40]/5 cursor-wait'
-                      : syllabusFile
-                        ? 'border-[#8C1D40]/40 bg-[#8C1D40]/5'
-                        : 'border-border/50 hover:border-[#8C1D40]/40 hover:bg-[#8C1D40]/5 cursor-pointer',
-                  )}
-                >
-                  {syllabusLoading ? (
-                    <>
-                      <Loader2 className="size-6 text-[#8C1D40] dark:text-[#C75B7A] animate-spin" />
-                      <p className="text-xs text-muted-foreground/70">Parsing syllabus…</p>
-                    </>
-                  ) : syllabusFile ? (
-                    <>
-                      <FileText className="size-6 text-[#8C1D40] dark:text-[#C75B7A]" />
-                      <p className="text-xs font-medium text-[#8C1D40] dark:text-[#C75B7A]">
-                        {syllabusFile.name}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground/50">
-                        Click to upload another
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="size-6 text-muted-foreground/40" />
-                      <p className="text-xs font-medium text-foreground/70">
-                        Drop your syllabus PDF here
-                      </p>
-                      <p className="text-[10px] text-muted-foreground/50">
-                        AI will parse it into a structured course
-                      </p>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* Textarea — hidden in upload mode, label changes in syllabus-topic mode */}
-            {creationMode !== 'syllabus-upload' && (
-              <textarea
-                ref={textareaRef}
-                placeholder={
-                  creationMode === 'syllabus-topic'
-                    ? 'Describe the course topic (e.g., "Introduction to Machine Learning for undergraduates, 8 weeks")…'
-                    : t('upload.requirementPlaceholder')
-                }
-                className="w-full resize-none border-0 bg-transparent px-4 pt-1 pb-2 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none min-h-[140px] max-h-[300px]"
-                value={form.requirement}
-                onChange={(e) => updateForm('requirement', e.target.value)}
-                onKeyDown={handleKeyDown}
-                rows={4}
-              />
-            )}
+            {/* ── Text input ── */}
+            <textarea
+              ref={textareaRef}
+              placeholder={t('upload.requirementPlaceholder')}
+              className="w-full resize-none border-0 bg-transparent px-4 pt-1 pb-2 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none min-h-[140px] max-h-[300px]"
+              value={form.requirement}
+              onChange={(e) => updateForm('requirement', e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={4}
+            />
 
             {/* Toolbar row */}
             <div className="px-3 pb-3 flex items-end gap-2">
@@ -786,74 +685,43 @@ function HomePage() {
                     setSettingsSection(section);
                     setSettingsOpen(true);
                   }}
-                  pdfFile={creationMode === 'quick' ? form.pdfFile : null}
+                  pdfFile={form.pdfFile}
                   onPdfFileChange={(f) => updateForm('pdfFile', f)}
                   onPdfError={setError}
                 />
               </div>
 
-              {/* Voice input — only in non-upload modes */}
-              {creationMode !== 'syllabus-upload' && (
-                <SpeechButton
-                  size="md"
-                  onTranscription={(text) => {
-                    setForm((prev) => {
-                      const next = prev.requirement + (prev.requirement ? ' ' : '') + text;
-                      updateRequirementCache(next);
-                      return { ...prev, requirement: next };
-                    });
-                  }}
-                />
-              )}
+              <SpeechButton
+                size="md"
+                onTranscription={(text) => {
+                  setForm((prev) => {
+                    const next = prev.requirement + (prev.requirement ? ' ' : '') + text;
+                    updateRequirementCache(next);
+                    return { ...prev, requirement: next };
+                  });
+                }}
+              />
 
-              {/* Send / action button */}
-              {creationMode === 'quick' && (
-                <button
-                  onClick={handleGenerate}
-                  disabled={!canGenerate}
-                  className={cn(
-                    'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
-                    canGenerate
-                      ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm cursor-pointer'
-                      : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
-                  )}
-                >
-                  <span className="text-xs font-medium">{t('toolbar.enterClassroom')}</span>
-                  <ArrowUp className="size-3.5" />
-                </button>
-              )}
-
-              {creationMode === 'syllabus-topic' && (
-                <button
-                  onClick={handleSyllabusGenerate}
-                  disabled={!canGenerate || syllabusLoading}
-                  className={cn(
-                    'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
-                    canGenerate && !syllabusLoading
-                      ? 'bg-[#8C1D40] text-white hover:opacity-90 shadow-sm cursor-pointer'
-                      : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
-                  )}
-                >
-                  {syllabusLoading ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="size-3.5" />
-                  )}
-                  <span className="text-xs font-medium">
-                    {syllabusLoading ? 'Generating…' : 'Design Syllabus'}
-                  </span>
-                </button>
-              )}
-
-              {creationMode === 'syllabus-upload' && syllabusFile && !syllabusLoading && (
-                <button
-                  onClick={() => setSyllabusEditorOpen(true)}
-                  className="shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 bg-[#8C1D40] text-white hover:opacity-90 shadow-sm transition-all px-3"
-                >
-                  <FileText className="size-3.5" />
-                  <span className="text-xs font-medium">Review Syllabus</span>
-                </button>
-              )}
+              {/* Generate Syllabus button */}
+              <button
+                onClick={handleSyllabusGenerate}
+                disabled={!canGenerate || syllabusLoading}
+                className={cn(
+                  'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
+                  canGenerate && !syllabusLoading
+                    ? 'bg-[#8C1D40] text-white hover:opacity-90 shadow-sm cursor-pointer'
+                    : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
+                )}
+              >
+                {syllabusLoading ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="size-3.5" />
+                )}
+                <span className="text-xs font-medium">
+                  {syllabusLoading ? 'Generating…' : 'Generate Syllabus'}
+                </span>
+              </button>
             </div>
           </div>
         </motion.div>
@@ -871,6 +739,35 @@ function HomePage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ── Upload a Syllabus (secondary action) ── */}
+        <div className="mt-3 flex items-center justify-center">
+          <input
+            ref={syllabusInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleSyllabusUpload(file);
+              e.target.value = '';
+            }}
+          />
+          <button
+            onClick={() => syllabusInputRef.current?.click()}
+            disabled={syllabusLoading}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-[#8C1D40] dark:hover:text-[#C75B7A] transition-colors disabled:opacity-40 disabled:cursor-wait"
+          >
+            {syllabusLoading && syllabusFile ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <Upload className="size-3" />
+            )}
+            {syllabusLoading && syllabusFile
+              ? `Parsing ${syllabusFile.name}…`
+              : 'Upload a Syllabus PDF instead'}
+          </button>
+        </div>
       </motion.div>
 
       {/* ═══ ASU Course Quick-Starts ═══ */}
