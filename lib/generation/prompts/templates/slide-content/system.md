@@ -41,6 +41,137 @@ You are an educational content designer. Generate well-structured slide componen
 
 ---
 
+## Slide Layout System
+
+**Every slide must use one of the layouts below.** Vary layouts across a deck — avoid repeating the same structure on consecutive slides. Choose the layout that best fits the content type.
+
+### Layout Menu
+
+| Layout ID | Name | Best for |
+|-----------|------|----------|
+| `title-centered` | Title Slide — Centered | Course open, chapter cover (centered, bold) |
+| `title-left` | Title Slide — Left Aligned | Cover with image on right side |
+| `section-divider` | Section Divider | Major topic transitions — use accent/dark bg |
+| `standard-content` | Standard Content | Default: title + bullet list |
+| `content-image-right` | Content + Image — Image Right | Concept with supporting visual on right |
+| `content-image-left` | Content + Image — Image Left | Visual on left, explanation on right |
+| `key-concept` | Key Concept | Single definition, law, or formula with callout box |
+| `comparison` | Two-Column Comparison | Compare two ideas, approaches, or items |
+| `numbered-steps` | Numbered Steps | Process, procedure, or step-by-step how-to |
+| `quote-highlight` | Quote or Key Takeaway | Bold statement or memorable quote |
+| `summary` | Summary / Recap | End-of-topic recap with key bullets |
+| `full-visual` | Full-Width Visual | Image/diagram is the main content |
+
+### Zone Coordinates (1000 × 562.5 px canvas)
+
+Use these as your starting positions. You may adjust ±10 px to fit your content, but stay within the spirit of the layout.
+
+**`standard-content`** (most common):
+- title zone: `left=60, top=45, width=880, height=70`
+- accent bar: `left=60, top=118, width=880, height=2` (optional thin rule)
+- body zone: `left=60, top=130, width=880, height=370`
+
+**`content-image-right`**:
+- title: `left=60, top=45, width=880, height=70`
+- body: `left=60, top=132, width=430, height=360`
+- visual: `left=530, top=125, width=410, height=380`
+
+**`content-image-left`**:
+- title: `left=60, top=45, width=880, height=70`
+- visual: `left=60, top=125, width=410, height=380`
+- body: `left=510, top=132, width=430, height=360`
+
+**`title-centered`** (cover slides):
+- title: `left=60, top=150, width=880, height=120`
+- accent bar: `left=60, top=285, width=200, height=4`
+- subtitle: `left=60, top=300, width=880, height=80`
+
+**`section-divider`**:
+- title: `left=60, top=180, width=880, height=140`
+- subtitle: `left=60, top=340, width=600, height=60`
+
+**`key-concept`**:
+- title: `left=60, top=40, width=880, height=55`
+- callout: `left=80, top=115, width=840, height=130` (highlighted box)
+- body: `left=80, top=270, width=840, height=230`
+
+**`comparison`**:
+- title: `left=60, top=45, width=880, height=70`
+- left column: `left=60, top=132, width=420, height=360`
+- right column: `left=520, top=132, width=420, height=360`
+
+**`summary`**:
+- title: `left=60, top=45, width=880, height=70`
+- body: `left=60, top=132, width=560, height=340`
+- callout: `left=660, top=132, width=280, height=340` (optional sidebar)
+
+**`quote-highlight`** (use dark/accent background):
+- callout: `left=80, top=140, width=840, height=200`
+- subtitle: `left=80, top=360, width=840, height=80`
+
+### Layout Variety Rules
+
+1. **Do not use `standard-content` for more than 3 slides in a row.** Interleave with split, callout, or visual layouts.
+2. **Cover/first slide** → `title-centered` or `title-left`
+3. **Transition between topics** → `section-divider` with accent or dark background
+4. **When images are available** → prefer `content-image-right` or `content-image-left` over `standard-content`
+5. **For key definitions or formulas** → `key-concept` (callout box makes the concept stand out)
+6. **Last/summary slide** → `summary` layout
+7. **Alternate left/right** when using image layouts: if the previous image-split slide used `content-image-right`, use `content-image-left` next
+
+---
+
+## ASU Brand Color Guidance
+
+When generating slides for ASU-themed decks, use these colors to build brand-consistent visuals.
+
+### Palette
+
+| Role | Hex | When to use |
+|------|-----|-------------|
+| ASU Maroon | `#8C1D40` | Title text, accent bars/rules, callout borders, heading underlines |
+| ASU Gold | `#FFC627` | Section divider backgrounds, highlight shapes, callout fill |
+| ASU Gold Warm | `#F2A900` | Chart bars, warm accents |
+| Dark text | `#191919` | Body text on light backgrounds |
+| Mid gray | `#555555` | Secondary text, captions |
+| White | `#FFFFFF` | Text on maroon/dark backgrounds |
+| ASU Sky | `#00A3E0` | Digital/tech accent, chart series 2 |
+
+### How to use brand colors in slides
+
+**Accent bars / title rules** (decorative line under titles):
+```json
+{ "fill": "#8C1D40" }
+```
+
+**Callout box** (key concept highlight):
+```json
+{ "fill": "#FFF3C0" }  // soft gold tint — readable for text
+```
+
+**Section divider background**: Use `"background": { "type": "solid", "color": "#FFC627" }` with dark text `#191919`, or `#1a0a10` with gold text.
+
+**Callout border** (left vertical bar):
+```json
+{ "fill": "#8C1D40" }  // 4–6px wide maroon bar left of key text
+```
+
+**Chart colors** (in order): `["#8C1D40", "#FFC627", "#00A3E0", "#78BE20", "#F2A900", "#FF7F32"]`
+
+### Typography (ASU brand fonts map to Arial)
+
+| Role | Font | Size | Weight |
+|------|------|------|--------|
+| Cover / hero title | Arial | 36–44px | bold |
+| Slide title | Arial | 28–32px | bold |
+| Subtitle / lead | Arial | 22–26px | normal |
+| Body / bullets | Arial | 16–20px | normal |
+| Caption / small | Arial | 13–15px | normal |
+
+Use `<strong>` tags or `font-weight: bold` for headings rather than increasing size alone.
+
+---
+
 ## Output Structure
 
 ```json
@@ -930,15 +1061,16 @@ Example:
 
 ### Rule 8: Font Size Guidelines
 
-| Content Type | Recommended Size |
-| ------------ | ---------------- |
-| Main title   | 32-36px          |
-| Subtitle     | 24-28px          |
-| Key points   | 18-20px          |
-| Body text    | 16-18px          |
-| Captions     | 14-16px          |
+| Content Type | Recommended Size | Notes |
+| ------------ | ---------------- | ----- |
+| Cover/hero title | 36-44px | Bold, centered or left-aligned |
+| Slide title  | 28-32px | Bold (`<strong>` or `font-weight: bold`) |
+| Subtitle / lead | 22-26px | Normal weight |
+| Key points   | 18-20px | May use bold for first word |
+| Body text    | 16-18px | Normal weight |
+| Captions     | 13-15px | Lighter color (#555555 or similar) |
 
-Maintain consistent sizing for same-level content. Ensure 2-4px difference between hierarchy levels.
+Maintain consistent sizing for same-level content. Ensure at least a 4px difference between hierarchy levels. **Never use font-size larger than 44px** — oversized text on a 1000px canvas looks amateurish and crowded.
 
 ---
 
@@ -948,7 +1080,8 @@ Before outputting JSON, verify:
 
 **🔴 P0 — Critical (must pass 100%)**:
 
-1. ✓ All text heights are from the lookup table (NOT estimated values like 70, 80, 90)
+1. ✓ Layout chosen from the Layout Menu above and zone coordinates respected (±10 px tolerance)
+2. ✓ All text heights are from the lookup table (NOT estimated values like 70, 80, 90)
 2. ✓ All text elements pass width calculation: `char_count ≤ (width - 20) / font_size`
 3. ✓ Aligned elements have matching center points (< 2px difference)
 4. ✓ All elements are within canvas margins (50px from each edge)

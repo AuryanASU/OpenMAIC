@@ -28,7 +28,8 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('ExportPPTX');
 
 const DEFAULT_FONT_SIZE = 16;
-const DEFAULT_FONT_FAMILY = 'Microsoft YaHei';
+const DEFAULT_FONT_FAMILY = 'Arial';
+const FALLBACK_FONT_COLOR = '#333333';
 
 // ── Color formatting ──
 
@@ -385,9 +386,14 @@ async function buildPptxBlob(
       if (notes) pptxSlide.addNotes(notes);
     }
 
+    // ── Per-slide theme properties (used as fallbacks for elements) ──
+    const slideThemeFontName = slide.theme?.fontName || DEFAULT_FONT_FAMILY;
+    const slideThemeFontColor = slide.theme?.fontColor || FALLBACK_FONT_COLOR;
+    const slideThemeBgColor = slide.theme?.backgroundColor;
+
     // ── Background ──
-    if (slide.background) {
-      const bg = slide.background;
+    const bg = slide.background;
+    if (bg) {
       if (bg.type === 'image' && bg.image) {
         if (isSVGImage(bg.image.src)) {
           pptxSlide.addImage({
@@ -419,6 +425,13 @@ async function buildPptxBlob(
           transparency: (1 - c.alpha) * 100,
         };
       }
+    } else if (slideThemeBgColor) {
+      // Fall back to the slide theme's background color when no explicit background is set
+      const c = formatColor(slideThemeBgColor);
+      pptxSlide.background = {
+        color: c.color,
+        transparency: (1 - c.alpha) * 100,
+      };
     }
 
     if (!slide.elements) continue;
@@ -434,8 +447,8 @@ async function buildPptxBlob(
           w: el.width / ratioPx2Inch,
           h: el.height / ratioPx2Inch,
           fontSize: DEFAULT_FONT_SIZE / ratioPx2Pt,
-          fontFace: el.defaultFontName || DEFAULT_FONT_FAMILY,
-          color: '#000000',
+          fontFace: el.defaultFontName || slideThemeFontName,
+          color: formatColor(slideThemeFontColor).color,
           valign: 'top',
           margin: 10 / ratioPx2Pt,
           paraSpaceBefore: 5 / ratioPx2Pt,
@@ -453,6 +466,7 @@ async function buildPptxBlob(
             transparency: (1 - c.alpha * opacity) * 100,
           };
         }
+        // Element-level overrides win over theme defaults
         if (el.defaultColor) options.color = formatColor(el.defaultColor).color;
         if (el.defaultFontName) options.fontFace = el.defaultFontName;
         if (el.shadow) options.shadow = getShadowOption(el.shadow, ratioPx2Pt);
@@ -627,8 +641,8 @@ async function buildPptxBlob(
             w: el.width / ratioPx2Inch,
             h: el.height / ratioPx2Inch,
             fontSize: DEFAULT_FONT_SIZE / ratioPx2Pt,
-            fontFace: DEFAULT_FONT_FAMILY,
-            color: '#000000',
+            fontFace: el.text.defaultFontName || slideThemeFontName,
+            color: formatColor(slideThemeFontColor).color,
             paraSpaceBefore: 5 / ratioPx2Pt,
             valign: el.text.align,
           };
@@ -829,7 +843,7 @@ async function buildPptxBlob(
               underline: { style: cell.style?.underline ? 'sng' : 'none' },
               align: cell.style?.align || 'left',
               valign: 'middle',
-              fontFace: cell.style?.fontname || DEFAULT_FONT_FAMILY,
+              fontFace: cell.style?.fontname || slideThemeFontName,
               fontSize: (cell.style?.fontsize ? parseInt(cell.style.fontsize) : 14) / ratioPx2Pt,
             };
             if (theme && themeColor) {

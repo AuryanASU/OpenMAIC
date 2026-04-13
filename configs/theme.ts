@@ -1,40 +1,148 @@
 import type { PPTElementOutline, PPTElementShadow } from '@/lib/types/slides';
 
 export interface PresetTheme {
+  /** Slide background color */
   background: string;
+  /** Default text color for body copy */
   fontColor: string;
+  /** Font family name (empty string = system default / Arial) */
   fontname: string;
+  /** Theme accent color palette — 6 colors used for shapes, charts, highlights */
   colors: string[];
+  /** Default border/outline color for decorative elements */
   borderColor?: string;
+  /** Heading font — if different from body (e.g., for a heavier weight) */
+  headingFont?: string;
+  /** Body font — base reading font */
+  bodyFont?: string;
+  /** Heading size scale: [h1px, h2px, h3px] in canvas pixels (1000px wide canvas) */
+  headingSizes?: [number, number, number];
+  /** Body text sizes: [largePx, basePx, smallPx] */
+  bodySizes?: [number, number, number];
+  /** Primary accent color (used for title bars, rules, callout borders) */
+  accentColor?: string;
+  /** Secondary accent color (charts, highlights) */
+  accentSecondary?: string;
+  /** Color for title slide backgrounds */
+  titleSlideBackground?: string;
+  /** Color for section divider backgrounds */
+  sectionBackground?: string;
+  /** Text color to use on sectionBackground */
+  sectionFontColor?: string;
+  /** Optional outline for bordered decorative elements */
   outline?: PPTElementOutline;
+  /** Optional shadow for card-style elements */
   shadow?: PPTElementShadow;
 }
 
+/**
+ * ASU typography scale (canvas: 1000 × 562.5 px)
+ *
+ * Derived from the ASU brand template (1920×1080) scaled by 1000/1920 ≈ 0.521.
+ * Font: Arial (web-safe substitute for ASU's Neue Haas Grotesk).
+ */
+const ASU_HEADING_SIZES: [number, number, number] = [36, 28, 22]; // h1, h2, h3 px
+const ASU_BODY_SIZES: [number, number, number] = [18, 16, 13]; // large, base, small px
+
 export const PRESET_THEMES: PresetTheme[] = [
-  // ASU Light — clean white with maroon & gold accents
+  // ─────────────────────────────────────────
+  // ASU THEMES (indices 0–4)
+  // ─────────────────────────────────────────
+
+  // 0: ASU Light — clean white, maroon headlines, gold accents
   {
     background: '#ffffff',
-    fontColor: '#1a1a2e',
+    fontColor: '#191919',
     borderColor: '#8C1D40',
-    fontname: '',
-    colors: ['#8C1D40', '#FFC627', '#78BE20', '#00A3E0', '#5C6670', '#FF7F32'],
+    fontname: 'Arial',
+    headingFont: 'Arial',
+    bodyFont: 'Arial',
+    headingSizes: ASU_HEADING_SIZES,
+    bodySizes: ASU_BODY_SIZES,
+    accentColor: '#8C1D40',
+    accentSecondary: '#FFC627',
+    titleSlideBackground: '#ffffff',
+    sectionBackground: '#FFC627',
+    sectionFontColor: '#191919',
+    colors: ['#8C1D40', '#FFC627', '#00A3E0', '#78BE20', '#5C6670', '#FF7F32'],
   },
-  // ASU Warm — subtle warm background with maroon highlights
+
+  // 1: ASU Warm — cream background, maroon + warm gold palette
   {
     background: '#faf8f5',
     fontColor: '#2d2024',
     borderColor: '#8C1D40',
-    fontname: '',
-    colors: ['#8C1D40', '#FFC627', '#E87722', '#00A3E0', '#78BE20', '#AB0520'],
+    fontname: 'Arial',
+    headingFont: 'Arial',
+    bodyFont: 'Arial',
+    headingSizes: ASU_HEADING_SIZES,
+    bodySizes: ASU_BODY_SIZES,
+    accentColor: '#8C1D40',
+    accentSecondary: '#F2A900',
+    titleSlideBackground: '#faf8f5',
+    sectionBackground: '#F2A900',
+    sectionFontColor: '#191919',
+    colors: ['#8C1D40', '#F2A900', '#E87722', '#00A3E0', '#78BE20', '#AB0520'],
   },
-  // ASU Dark — deep maroon background, gold & light text
+
+  // 2: ASU Dark — deep maroon background, gold headlines, light body text
   {
-    background: '#2d1525',
+    background: '#1a0a10',
     fontColor: '#f5f0eb',
     borderColor: '#FFC627',
-    fontname: '',
+    fontname: 'Arial',
+    headingFont: 'Arial',
+    bodyFont: 'Arial',
+    headingSizes: ASU_HEADING_SIZES,
+    bodySizes: ASU_BODY_SIZES,
+    accentColor: '#FFC627',
+    accentSecondary: '#C75B7A',
+    titleSlideBackground: '#1a0a10',
+    sectionBackground: '#2d1525',
+    sectionFontColor: '#FFC627',
     colors: ['#FFC627', '#C75B7A', '#78BE20', '#00A3E0', '#FF7F32', '#f5f0eb'],
   },
+
+  // 3: ASU Gold — gold background, dark text (high-contrast section slide)
+  {
+    background: '#FFC627',
+    fontColor: '#191919',
+    borderColor: '#8C1D40',
+    fontname: 'Arial',
+    headingFont: 'Arial',
+    bodyFont: 'Arial',
+    headingSizes: ASU_HEADING_SIZES,
+    bodySizes: ASU_BODY_SIZES,
+    accentColor: '#8C1D40',
+    accentSecondary: '#191919',
+    titleSlideBackground: '#FFC627',
+    sectionBackground: '#8C1D40',
+    sectionFontColor: '#FFC627',
+    colors: ['#8C1D40', '#191919', '#404040', '#FFFFFF', '#F2A900', '#00A3E0'],
+  },
+
+  // 4: ASU Slate — cool dark slate, gold + sky-blue accents
+  {
+    background: '#1e2a35',
+    fontColor: '#f0f4f8',
+    borderColor: '#00A3E0',
+    fontname: 'Arial',
+    headingFont: 'Arial',
+    bodyFont: 'Arial',
+    headingSizes: ASU_HEADING_SIZES,
+    bodySizes: ASU_BODY_SIZES,
+    accentColor: '#00A3E0',
+    accentSecondary: '#FFC627',
+    titleSlideBackground: '#1e2a35',
+    sectionBackground: '#00A3E0',
+    sectionFontColor: '#ffffff',
+    colors: ['#00A3E0', '#FFC627', '#8C1D40', '#78BE20', '#FF7F32', '#f0f4f8'],
+  },
+
+  // ─────────────────────────────────────────
+  // STANDARD THEMES (indices 5–18)
+  // ─────────────────────────────────────────
+
   {
     background: '#ffffff',
     fontColor: '#333333',
