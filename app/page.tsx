@@ -579,19 +579,22 @@ function HomePage() {
                 icon: <BookOpen className="size-4" />,
                 title: 'Introduction to Data Science',
                 desc: 'Fundamentals of data analysis, Python, and statistical thinking for ASU undergraduates.',
-                prompt: 'Create a comprehensive introductory course on Data Science for undergraduate students at Arizona State University. Cover: what is data science, the data science lifecycle, Python basics for data analysis (pandas, numpy), exploratory data analysis and visualization, basic statistics and probability, intro to machine learning concepts, and ethical considerations in data science. Include interactive quizzes, hands-on coding exercises, and real-world ASU research examples. Target 8-10 lessons.',
+                prompt:
+                  'Create a comprehensive introductory course on Data Science for undergraduate students at Arizona State University. Cover: what is data science, the data science lifecycle, Python basics for data analysis (pandas, numpy), exploratory data analysis and visualization, basic statistics and probability, intro to machine learning concepts, and ethical considerations in data science. Include interactive quizzes, hands-on coding exercises, and real-world ASU research examples. Target 8-10 lessons.',
               },
               {
                 icon: <FlaskConical className="size-4" />,
                 title: 'Sustainability & Innovation',
                 desc: 'Exploring sustainable solutions through innovation, design thinking, and systems analysis.',
-                prompt: 'Create an engaging course on Sustainability and Innovation for Arizona State University students. Cover: introduction to sustainability science, the UN Sustainable Development Goals, systems thinking for environmental challenges, design thinking for sustainable solutions, renewable energy technologies, circular economy principles, sustainable urban planning, measuring environmental impact, innovation frameworks for sustainability startups, and case studies from ASU research initiatives. Include interactive discussions, project-based learning activities, and quizzes. Target 8-10 lessons.',
+                prompt:
+                  'Create an engaging course on Sustainability and Innovation for Arizona State University students. Cover: introduction to sustainability science, the UN Sustainable Development Goals, systems thinking for environmental challenges, design thinking for sustainable solutions, renewable energy technologies, circular economy principles, sustainable urban planning, measuring environmental impact, innovation frameworks for sustainability startups, and case studies from ASU research initiatives. Include interactive discussions, project-based learning activities, and quizzes. Target 8-10 lessons.',
               },
               {
                 icon: <BarChart3 className="size-4" />,
                 title: 'Business Analytics Essentials',
                 desc: 'Data-driven decision making with analytics tools, dashboards, and strategic frameworks.',
-                prompt: 'Create a professional course on Business Analytics Essentials for ASU W. P. Carey School of Business students. Cover: introduction to business analytics and its role in decision-making, data collection and quality assessment, descriptive analytics and KPI dashboards, data visualization best practices, predictive analytics fundamentals, A/B testing and experimentation, customer analytics and segmentation, supply chain analytics, financial analytics basics, and communicating insights to stakeholders. Include case studies from real companies, interactive exercises, and quizzes. Target 8-10 lessons.',
+                prompt:
+                  'Create a professional course on Business Analytics Essentials for ASU W. P. Carey School of Business students. Cover: introduction to business analytics and its role in decision-making, data collection and quality assessment, descriptive analytics and KPI dashboards, data visualization best practices, predictive analytics fundamentals, A/B testing and experimentation, customer analytics and segmentation, supply chain analytics, financial analytics basics, and communicating insights to stakeholders. Include case studies from real companies, interactive exercises, and quizzes. Target 8-10 lessons.',
               },
             ].map((course, i) => (
               <button
@@ -611,9 +614,7 @@ function HomePage() {
                     {course.title}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground/60 leading-relaxed">
-                  {course.desc}
-                </p>
+                <p className="text-xs text-muted-foreground/60 leading-relaxed">{course.desc}</p>
               </button>
             ))}
           </div>
