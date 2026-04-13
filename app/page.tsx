@@ -21,9 +21,7 @@ import {
   BookOpen,
   FlaskConical,
   BarChart3,
-  FileText,
   Upload,
-  Sparkles,
   Loader2,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
@@ -414,77 +412,6 @@ function HomePage() {
     }
   };
 
-  const handleGenerate = async () => {
-    // Validate setup before proceeding
-    if (!currentModelId) {
-      showSetupToast(
-        <BotOff className="size-4.5 text-amber-600 dark:text-amber-400" />,
-        t('settings.modelNotConfigured'),
-        t('settings.setupNeeded'),
-      );
-      setSettingsOpen(true);
-      return;
-    }
-
-    if (!form.requirement.trim()) {
-      setError(t('upload.requirementRequired'));
-      return;
-    }
-
-    setError(null);
-
-    try {
-      const userProfile = useUserProfileStore.getState();
-      const requirements: UserRequirements = {
-        requirement: form.requirement,
-        language: form.language,
-        userNickname: userProfile.nickname || undefined,
-        userBio: userProfile.bio || undefined,
-        webSearch: form.webSearch || undefined,
-      };
-
-      let pdfStorageKey: string | undefined;
-      let pdfFileName: string | undefined;
-      let pdfProviderId: string | undefined;
-      let pdfProviderConfig: { apiKey?: string; baseUrl?: string } | undefined;
-
-      if (form.pdfFile) {
-        pdfStorageKey = await storePdfBlob(form.pdfFile);
-        pdfFileName = form.pdfFile.name;
-
-        const settings = useSettingsStore.getState();
-        pdfProviderId = settings.pdfProviderId;
-        const providerCfg = settings.pdfProvidersConfig?.[settings.pdfProviderId];
-        if (providerCfg) {
-          pdfProviderConfig = {
-            apiKey: providerCfg.apiKey,
-            baseUrl: providerCfg.baseUrl,
-          };
-        }
-      }
-
-      const sessionState = {
-        sessionId: nanoid(),
-        requirements,
-        pdfText: '',
-        pdfImages: [],
-        imageStorageIds: [],
-        pdfStorageKey,
-        pdfFileName,
-        pdfProviderId,
-        pdfProviderConfig,
-        sceneOutlines: null,
-        currentStep: 'generating' as const,
-      };
-      sessionStorage.setItem('generationSession', JSON.stringify(sessionState));
-
-      router.push('/generation-preview');
-    } catch (err) {
-      log.error('Error preparing generation:', err);
-      setError(err instanceof Error ? err.message : t('upload.generateFailed'));
-    }
-  };
-
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -702,24 +629,24 @@ function HomePage() {
                 }}
               />
 
-              {/* Generate Syllabus button */}
+              {/* Submit — always generates syllabus first */}
               <button
                 onClick={handleSyllabusGenerate}
                 disabled={!canGenerate || syllabusLoading}
                 className={cn(
                   'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
                   canGenerate && !syllabusLoading
-                    ? 'bg-[#8C1D40] text-white hover:opacity-90 shadow-sm cursor-pointer'
+                    ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm cursor-pointer'
                     : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
                 )}
               >
                 {syllabusLoading ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  <Sparkles className="size-3.5" />
+                  <ArrowUp className="size-3.5" />
                 )}
                 <span className="text-xs font-medium">
-                  {syllabusLoading ? 'Generating…' : 'Generate Syllabus'}
+                  {syllabusLoading ? 'Generating…' : t('toolbar.enterClassroom')}
                 </span>
               </button>
             </div>
