@@ -6,6 +6,7 @@ import type {
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
+import type { CourseSyllabus } from '@/lib/types/syllabus';
 
 // Session state stored in sessionStorage
 export interface GenerationSessionState {
@@ -13,6 +14,8 @@ export interface GenerationSessionState {
   requirements: UserRequirements;
   pdfText: string;
   pdfImages?: PdfImage[];
+  /** Optional syllabus that, when present, drives outline generation */
+  syllabus?: CourseSyllabus;
   imageStorageIds?: string[];
   imageMapping?: ImageMapping;
   sceneOutlines?: SceneOutline[] | null;
