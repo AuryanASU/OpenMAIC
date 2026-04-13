@@ -21,6 +21,11 @@ import {
   BookOpen,
   FlaskConical,
   BarChart3,
+  FileText,
+  Upload,
+  Zap,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -35,7 +40,10 @@ import { useTheme } from '@/lib/hooks/use-theme';
 import { nanoid } from 'nanoid';
 import { storePdfBlob } from '@/lib/utils/image-storage';
 import type { UserRequirements } from '@/lib/types/generation';
+import type { CourseSyllabus } from '@/lib/types/syllabus';
 import { useSettingsStore } from '@/lib/store/settings';
+import { useSyllabusStore } from '@/lib/store/syllabus';
+import { SyllabusEditor } from '@/components/syllabus/syllabus-editor';
 import { useUserProfileStore, AVATAR_OPTIONS } from '@/lib/store/user-profile';
 import {
   StageListItem,
@@ -127,6 +135,15 @@ function HomePage() {
       setForm((prev) => ({ ...prev, requirement: cachedRequirement }));
     }
   }
+
+  // Syllabus flow
+  const [creationMode, setCreationMode] = useState<'quick' | 'syllabus-topic' | 'syllabus-upload'>('quick');
+  const [syllabusLoading, setSyllabusLoading] = useState(false);
+  const [syllabusFile, setSyllabusFile] = useState<File | null>(null);
+  const syllabusInputRef = useRef<HTMLInputElement>(null);
+  const syllabusEditorOpen = useSyllabusStore((s) => s.editorOpen);
+  const setSyllabusEditorOpen = useSyllabusStore((s) => s.setEditorOpen);
+  const setSyllabus = useSyllabusStore((s) => s.setSyllabus);
 
   const [themeOpen, setThemeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +255,165 @@ function HomePage() {
       ),
       { duration: 4000 },
     );
+  };
+
+  // ── Syllabus: generate from topic ──────────────────────────────────────
+  const handleSyllabusGenerate = async () => {
+    if (!currentModelId) {
+      showSetupToast(
+        <BotOff className="size-4.5 text-amber-600 dark:text-amber-400" />,
+        t('settings.modelNotConfigured'),
+        t('settings.setupNeeded'),
+      );
+      setSettingsOpen(true);
+      return;
+    }
+    if (!form.requirement.trim()) {
+      setError('Please describe the course topic to generate a syllabus.');
+      return;
+    }
+    setError(null);
+    setSyllabusLoading(true);
+
+    try {
+      const settings = useSettingsStore.getState();
+      const res = await fetch('/api/generate-syllabus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: form.requirement.trim(),
+          language: form.language,
+          model: settings.modelId,
+          apiKey: settings.modelConfig?.apiKey,
+          baseUrl: settings.modelConfig?.baseUrl,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error('No response stream');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value);
+        for (const line of text.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6)) as { syllabus?: CourseSyllabus };
+            if (data.syllabus) {
+              setSyllabus(data.syllabus);
+              setSyllabusEditorOpen(true);
+            }
+          } catch {
+            /* skip */
+          }
+        }
+      }
+    } catch (err) {
+      log.error('Syllabus generation failed:', err);
+      setError(
+        err instanceof Error ? err.message : 'Failed to generate syllabus. Please try again.',
+      );
+    } finally {
+      setSyllabusLoading(false);
+    }
+  };
+
+  // ── Syllabus: parse uploaded PDF ────────────────────────────────────────
+  const handleSyllabusUpload = async (file: File) => {
+    if (!currentModelId) {
+      showSetupToast(
+        <BotOff className="size-4.5 text-amber-600 dark:text-amber-400" />,
+        t('settings.modelNotConfigured'),
+        t('settings.setupNeeded'),
+      );
+      setSettingsOpen(true);
+      return;
+    }
+    setError(null);
+    setSyllabusLoading(true);
+    setSyllabusFile(file);
+
+    try {
+      const settings = useSettingsStore.getState();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('model', settings.modelId ?? '');
+      if (settings.modelConfig?.apiKey) formData.append('apiKey', settings.modelConfig.apiKey);
+      if (settings.modelConfig?.baseUrl) formData.append('baseUrl', settings.modelConfig.baseUrl);
+
+      const res = await fetch('/api/parse-syllabus', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+
+      const data = (await res.json()) as { success: boolean; syllabus: CourseSyllabus };
+      if (!data.success || !data.syllabus) throw new Error('Invalid response from server');
+
+      setSyllabus(data.syllabus);
+      setSyllabusEditorOpen(true);
+    } catch (err) {
+      log.error('Syllabus upload failed:', err);
+      setError(
+        err instanceof Error ? err.message : 'Failed to parse syllabus. Please try another file.',
+      );
+      setSyllabusFile(null);
+    } finally {
+      setSyllabusLoading(false);
+    }
+  };
+
+  // ── Syllabus → Course generation pipeline ──────────────────────────────
+  const handleGenerateFromSyllabus = async (syllabus: CourseSyllabus) => {
+    if (!currentModelId) {
+      showSetupToast(
+        <BotOff className="size-4.5 text-amber-600 dark:text-amber-400" />,
+        t('settings.modelNotConfigured'),
+        t('settings.setupNeeded'),
+      );
+      setSettingsOpen(true);
+      return;
+    }
+    setSyllabusEditorOpen(false);
+    setError(null);
+
+    try {
+      const userProfile = useUserProfileStore.getState();
+      // Build a structured requirement string that the existing pipeline can use,
+      // and attach the full syllabus to sessionStorage for outline-generator to pick up.
+      const syllabusRequirement = `Course: ${syllabus.title}\n\n${syllabus.description}\n\nModules:\n${syllabus.modules
+        .map((m) => `- ${m.title}: ${m.topics.join(', ')}`)
+        .join('\n')}`;
+
+      const requirements: UserRequirements = {
+        requirement: syllabusRequirement,
+        language: form.language,
+        userNickname: userProfile.nickname || undefined,
+        userBio: userProfile.bio || undefined,
+      };
+
+      const sessionState = {
+        sessionId: nanoid(),
+        requirements,
+        pdfText: '',
+        pdfImages: [],
+        imageStorageIds: [],
+        pdfStorageKey: undefined,
+        pdfFileName: undefined,
+        pdfProviderId: undefined,
+        pdfProviderConfig: undefined,
+        sceneOutlines: null,
+        currentStep: 'generating' as const,
+        // Attach syllabus for the outline generator
+        syllabus,
+      };
+      sessionStorage.setItem('generationSession', JSON.stringify(sessionState));
+      router.push('/generation-preview');
+    } catch (err) {
+      log.error('Error preparing syllabus generation:', err);
+      setError(err instanceof Error ? err.message : t('upload.generateFailed'));
+    }
   };
 
   const handleGenerate = async () => {
@@ -488,16 +664,115 @@ function HomePage() {
               </div>
             </div>
 
-            {/* Textarea */}
-            <textarea
-              ref={textareaRef}
-              placeholder={t('upload.requirementPlaceholder')}
-              className="w-full resize-none border-0 bg-transparent px-4 pt-1 pb-2 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none min-h-[140px] max-h-[300px]"
-              value={form.requirement}
-              onChange={(e) => updateForm('requirement', e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={4}
-            />
+            {/* ── Creation Mode Selector ── */}
+            <div className="px-4 pt-1 pb-2 flex items-center gap-1">
+              {(
+                [
+                  {
+                    id: 'quick' as const,
+                    icon: <Zap className="size-3" />,
+                    label: 'Quick Generate',
+                  },
+                  {
+                    id: 'syllabus-topic' as const,
+                    icon: <Sparkles className="size-3" />,
+                    label: 'Design Syllabus',
+                  },
+                  {
+                    id: 'syllabus-upload' as const,
+                    icon: <Upload className="size-3" />,
+                    label: 'Upload Syllabus',
+                  },
+                ] as const
+              ).map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => setCreationMode(mode.id)}
+                  className={cn(
+                    'flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all',
+                    creationMode === mode.id
+                      ? 'bg-[#8C1D40] text-white shadow-sm'
+                      : 'text-muted-foreground/60 hover:text-foreground hover:bg-muted/60',
+                  )}
+                >
+                  {mode.icon}
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Syllabus upload drop area ── */}
+            {creationMode === 'syllabus-upload' && (
+              <div className="mx-4 mb-2">
+                <input
+                  ref={syllabusInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleSyllabusUpload(file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  onClick={() => syllabusInputRef.current?.click()}
+                  disabled={syllabusLoading}
+                  className={cn(
+                    'w-full rounded-xl border-2 border-dashed py-6 flex flex-col items-center justify-center gap-2 transition-all',
+                    syllabusLoading
+                      ? 'border-[#8C1D40]/30 bg-[#8C1D40]/5 cursor-wait'
+                      : syllabusFile
+                        ? 'border-[#8C1D40]/40 bg-[#8C1D40]/5'
+                        : 'border-border/50 hover:border-[#8C1D40]/40 hover:bg-[#8C1D40]/5 cursor-pointer',
+                  )}
+                >
+                  {syllabusLoading ? (
+                    <>
+                      <Loader2 className="size-6 text-[#8C1D40] dark:text-[#C75B7A] animate-spin" />
+                      <p className="text-xs text-muted-foreground/70">Parsing syllabus…</p>
+                    </>
+                  ) : syllabusFile ? (
+                    <>
+                      <FileText className="size-6 text-[#8C1D40] dark:text-[#C75B7A]" />
+                      <p className="text-xs font-medium text-[#8C1D40] dark:text-[#C75B7A]">
+                        {syllabusFile.name}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/50">
+                        Click to upload another
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="size-6 text-muted-foreground/40" />
+                      <p className="text-xs font-medium text-foreground/70">
+                        Drop your syllabus PDF here
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/50">
+                        AI will parse it into a structured course
+                      </p>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Textarea — hidden in upload mode, label changes in syllabus-topic mode */}
+            {creationMode !== 'syllabus-upload' && (
+              <textarea
+                ref={textareaRef}
+                placeholder={
+                  creationMode === 'syllabus-topic'
+                    ? 'Describe the course topic (e.g., "Introduction to Machine Learning for undergraduates, 8 weeks")…'
+                    : t('upload.requirementPlaceholder')
+                }
+                className="w-full resize-none border-0 bg-transparent px-4 pt-1 pb-2 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none min-h-[140px] max-h-[300px]"
+                value={form.requirement}
+                onChange={(e) => updateForm('requirement', e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={4}
+              />
+            )}
 
             {/* Toolbar row */}
             <div className="px-3 pb-3 flex items-end gap-2">
@@ -511,38 +786,74 @@ function HomePage() {
                     setSettingsSection(section);
                     setSettingsOpen(true);
                   }}
-                  pdfFile={form.pdfFile}
+                  pdfFile={creationMode === 'quick' ? form.pdfFile : null}
                   onPdfFileChange={(f) => updateForm('pdfFile', f)}
                   onPdfError={setError}
                 />
               </div>
 
-              {/* Voice input */}
-              <SpeechButton
-                size="md"
-                onTranscription={(text) => {
-                  setForm((prev) => {
-                    const next = prev.requirement + (prev.requirement ? ' ' : '') + text;
-                    updateRequirementCache(next);
-                    return { ...prev, requirement: next };
-                  });
-                }}
-              />
+              {/* Voice input — only in non-upload modes */}
+              {creationMode !== 'syllabus-upload' && (
+                <SpeechButton
+                  size="md"
+                  onTranscription={(text) => {
+                    setForm((prev) => {
+                      const next = prev.requirement + (prev.requirement ? ' ' : '') + text;
+                      updateRequirementCache(next);
+                      return { ...prev, requirement: next };
+                    });
+                  }}
+                />
+              )}
 
-              {/* Send button */}
-              <button
-                onClick={handleGenerate}
-                disabled={!canGenerate}
-                className={cn(
-                  'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
-                  canGenerate
-                    ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm cursor-pointer'
-                    : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
-                )}
-              >
-                <span className="text-xs font-medium">{t('toolbar.enterClassroom')}</span>
-                <ArrowUp className="size-3.5" />
-              </button>
+              {/* Send / action button */}
+              {creationMode === 'quick' && (
+                <button
+                  onClick={handleGenerate}
+                  disabled={!canGenerate}
+                  className={cn(
+                    'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
+                    canGenerate
+                      ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm cursor-pointer'
+                      : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
+                  )}
+                >
+                  <span className="text-xs font-medium">{t('toolbar.enterClassroom')}</span>
+                  <ArrowUp className="size-3.5" />
+                </button>
+              )}
+
+              {creationMode === 'syllabus-topic' && (
+                <button
+                  onClick={handleSyllabusGenerate}
+                  disabled={!canGenerate || syllabusLoading}
+                  className={cn(
+                    'shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 transition-all px-3',
+                    canGenerate && !syllabusLoading
+                      ? 'bg-[#8C1D40] text-white hover:opacity-90 shadow-sm cursor-pointer'
+                      : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
+                  )}
+                >
+                  {syllabusLoading ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-3.5" />
+                  )}
+                  <span className="text-xs font-medium">
+                    {syllabusLoading ? 'Generating…' : 'Design Syllabus'}
+                  </span>
+                </button>
+              )}
+
+              {creationMode === 'syllabus-upload' && syllabusFile && !syllabusLoading && (
+                <button
+                  onClick={() => setSyllabusEditorOpen(true)}
+                  className="shrink-0 h-8 rounded-lg flex items-center justify-center gap-1.5 bg-[#8C1D40] text-white hover:opacity-90 shadow-sm transition-all px-3"
+                >
+                  <FileText className="size-3.5" />
+                  <span className="text-xs font-medium">Review Syllabus</span>
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -703,6 +1014,24 @@ function HomePage() {
       <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
         ASU AI Classroom &middot; Powered by OpenMAIC
       </div>
+
+      {/* ═══ Syllabus Editor overlay ═══ */}
+      <AnimatePresence>
+        {syllabusEditorOpen && (
+          <motion.div
+            key="syllabus-editor"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <SyllabusEditor
+              onGenerate={handleGenerateFromSyllabus}
+              onClose={() => setSyllabusEditorOpen(false)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

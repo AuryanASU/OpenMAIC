@@ -30,6 +30,8 @@ import type {
   SceneOutline,
   ImageMapping,
 } from '@/lib/types/generation';
+import type { CourseSyllabus } from '@/lib/types/syllabus';
+import { syllabusToOutlines } from '@/lib/generation/outline-generator';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
@@ -110,15 +112,46 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Requirements are required');
     }
 
-    const { requirements, pdfText, pdfImages, imageMapping, researchContext, agents } = body as {
-      requirements: UserRequirements;
-      pdfText?: string;
-      pdfImages?: PdfImage[];
-      imageMapping?: ImageMapping;
-      researchContext?: string;
-      agents?: AgentInfo[];
-    };
+    const { requirements, pdfText, pdfImages, imageMapping, researchContext, agents, syllabus } =
+      body as {
+        requirements: UserRequirements;
+        pdfText?: string;
+        pdfImages?: PdfImage[];
+        imageMapping?: ImageMapping;
+        researchContext?: string;
+        agents?: AgentInfo[];
+        syllabus?: CourseSyllabus;
+      };
     requirementSnippet = requirements?.requirement?.substring(0, 60);
+
+    // ── Syllabus fast path ────────────────────────────────────────────────
+    // When a structured syllabus is provided, derive outlines from it directly
+    // without an additional AI planning call, resulting in higher fidelity.
+    if (syllabus?.modules?.length) {
+      log.info(
+        `Using syllabus "${syllabus.title}" as outline source (${syllabus.modules.length} modules)`,
+      );
+      const encoder = new TextEncoder();
+      const outlines = syllabusToOutlines(syllabus, requirements.language ?? 'en-US');
+      const stream = new ReadableStream({
+        start(controller) {
+          for (let i = 0; i < outlines.length; i++) {
+            const event = JSON.stringify({ type: 'outline', data: outlines[i], index: i });
+            controller.enqueue(encoder.encode(`data: ${event}\n\n`));
+          }
+          const done = JSON.stringify({ type: 'done', outlines });
+          controller.enqueue(encoder.encode(`data: ${done}\n\n`));
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      });
+    }
 
     // Detect vision capability
     const hasVision = !!modelInfo?.capabilities?.vision;

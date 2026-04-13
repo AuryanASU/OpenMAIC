@@ -537,6 +537,8 @@ function GenerationPreviewContent() {
               imageMapping,
               researchContext: currentSession.researchContext,
               agents,
+              // Pass syllabus when present — the API will use it as the outline source
+              ...(currentSession.syllabus ? { syllabus: currentSession.syllabus } : {}),
             }),
             signal,
           })

@@ -11,6 +11,7 @@ import type {
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
+import type { CourseSyllabus } from '@/lib/types/syllabus';
 import { buildPrompt, PROMPT_IDS } from './prompts';
 import { formatImageDescription, formatImagePlaceholder } from './prompt-formatters';
 import { parseJsonResponse } from './json-repair';
@@ -19,9 +20,107 @@ import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
+// ── Syllabus helpers ─────────────────────────────────────────────────────
+
 /**
- * Generate scene outlines from user requirements
- * Now uses simplified UserRequirements with just requirement text and language
+ * Map a syllabus module's declared sceneTypes to an appropriate SceneOutline type.
+ * Falls back to 'slide' when no types are declared.
+ */
+function pickSceneType(
+  sceneTypes: CourseSyllabus['modules'][number]['sceneTypes'],
+): SceneOutline['type'] {
+  if (!sceneTypes || sceneTypes.length === 0) return 'slide';
+  // Prefer interactive and pbl over plain slide; quiz is always honoured
+  const priority: SceneOutline['type'][] = ['pbl', 'interactive', 'quiz', 'slide'];
+  for (const p of priority) {
+    if (sceneTypes.includes(p)) return p;
+  }
+  return 'slide';
+}
+
+/**
+ * Convert a CourseSyllabus directly into SceneOutline[] without an extra AI call.
+ *
+ * Each module becomes one or more scenes depending on module complexity.
+ * The caller may still pass these through the normal scene-generation stage.
+ */
+export function syllabusToOutlines(
+  syllabus: CourseSyllabus,
+  language: 'zh-CN' | 'en-US',
+): SceneOutline[] {
+  const outlines: SceneOutline[] = [];
+
+  // Opening slide — course introduction
+  outlines.push({
+    id: nanoid(),
+    type: 'slide',
+    title: syllabus.title,
+    description: `Course introduction: ${syllabus.description.substring(0, 300)}`,
+    keyPoints: syllabus.learningOutcomes.slice(0, 5),
+    order: 1,
+    language,
+  });
+
+  // One outline per module
+  for (const mod of syllabus.modules) {
+    const type = pickSceneType(mod.sceneTypes);
+    const outline: SceneOutline = {
+      id: nanoid(),
+      type,
+      title: mod.title,
+      description: mod.description || `Cover key topics in ${mod.title}`,
+      keyPoints: [...mod.topics.slice(0, 5), ...mod.learningObjectives.slice(0, 3)].slice(0, 6),
+      teachingObjective: mod.learningObjectives[0],
+      order: outlines.length + 1,
+      language,
+    };
+
+    // Attach type-specific configs
+    if (type === 'quiz') {
+      outline.quizConfig = {
+        questionCount: Math.min(5, Math.max(3, mod.topics.length)),
+        difficulty: 'medium',
+        questionTypes: ['single', 'multiple'],
+      };
+    } else if (type === 'interactive') {
+      outline.interactiveConfig = {
+        conceptName: mod.topics[0] ?? mod.title,
+        conceptOverview: mod.description,
+        designIdea: `Interactive visualization of ${mod.topics.slice(0, 2).join(' and ')}`,
+        subject: syllabus.title,
+      };
+    } else if (type === 'pbl') {
+      outline.pblConfig = {
+        projectTopic: mod.title,
+        projectDescription: mod.description,
+        targetSkills: mod.learningObjectives.slice(0, 4),
+        issueCount: 3,
+        language,
+      };
+    }
+
+    outlines.push(outline);
+  }
+
+  // Closing slide — summary & next steps
+  outlines.push({
+    id: nanoid(),
+    type: 'slide',
+    title: 'Course Summary & Next Steps',
+    description:
+      'Recap key takeaways, review learning outcomes achieved, and outline further learning paths.',
+    keyPoints: syllabus.learningOutcomes.slice(0, 4),
+    order: outlines.length + 1,
+    language,
+  });
+
+  return outlines;
+}
+
+/**
+ * Generate scene outlines from user requirements.
+ * When a CourseSyllabus is provided, it is used as the primary structure source,
+ * producing better-aligned outlines without an extra AI planning call.
  */
 export async function generateSceneOutlinesFromRequirements(
   requirements: UserRequirements,
@@ -36,8 +135,44 @@ export async function generateSceneOutlinesFromRequirements(
     videoGenerationEnabled?: boolean;
     researchContext?: string;
     teacherContext?: string;
+    /** When provided, outlines are derived from the syllabus structure */
+    syllabus?: CourseSyllabus;
   },
 ): Promise<GenerationResult<SceneOutline[]>> {
+  // ── Fast path: derive outlines directly from syllabus ──────────────────
+  if (options?.syllabus) {
+    log.info(`[outline-generator] Using syllabus "${options.syllabus.title}" as outline source`);
+    try {
+      callbacks?.onProgress?.({
+        currentStage: 1,
+        overallProgress: 20,
+        stageProgress: 50,
+        statusMessage: 'Mapping syllabus modules to scene outlines…',
+        scenesGenerated: 0,
+        totalScenes: 0,
+      });
+
+      const outlines = syllabusToOutlines(options.syllabus, requirements.language);
+      const enriched = uniquifyMediaElementIds(outlines);
+
+      callbacks?.onProgress?.({
+        currentStage: 1,
+        overallProgress: 50,
+        stageProgress: 100,
+        statusMessage: `Generated ${enriched.length} outlines from syllabus`,
+        scenesGenerated: 0,
+        totalScenes: enriched.length,
+      });
+
+      return { success: true, data: enriched };
+    } catch (err) {
+      log.warn(
+        '[outline-generator] Syllabus-to-outlines failed, falling back to AI generation:',
+        err,
+      );
+      // Fall through to AI generation below
+    }
+  }
   // Build available images description for the prompt
   let availableImagesText =
     requirements.language === 'zh-CN' ? '无可用图片' : 'No images available';
@@ -94,10 +229,17 @@ export async function generateSceneOutlinesFromRequirements(
       '**IMPORTANT: Do NOT include any video mediaGenerations (type: "video") in the outlines. Video generation is disabled. Image generation is allowed.**';
   }
 
+  // When a syllabus is provided but the fast path failed, inject it as structured context
+  const syllabusContext = options?.syllabus
+    ? `\n\n## Structured Course Syllabus\n\nTitle: ${options.syllabus.title}\nModules:\n${options.syllabus.modules
+        .map((m) => `- ${m.title}: ${m.topics.join(', ')}`)
+        .join('\n')}\n\nPlease align scene outlines with this module structure.`
+    : '';
+
   // Use simplified prompt variables
   const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
     // New simplified variables
-    requirement: requirements.requirement,
+    requirement: requirements.requirement + syllabusContext,
     language: requirements.language,
     pdfContent: pdfText
       ? pdfText.substring(0, MAX_PDF_CONTENT_CHARS)
