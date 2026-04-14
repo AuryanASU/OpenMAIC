@@ -378,7 +378,6 @@ export function MediaPopover() {
             </TabPanel>
           )}
         </div>
-
       </PopoverContent>
     </Popover>
   );

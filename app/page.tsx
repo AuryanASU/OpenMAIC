@@ -428,7 +428,6 @@ function HomePage() {
             </div>
           )}
         </div>
-
       </div>
 
       {/* ═══ Background Decor ═══ */}

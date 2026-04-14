@@ -1,15 +1,6 @@
 'use client';
 
-import {
-  Sun,
-  Moon,
-  Monitor,
-  ArrowLeft,
-  Loader2,
-  Download,
-  FileDown,
-  Package,
-} from 'lucide-react';
+import { Sun, Moon, Monitor, ArrowLeft, Loader2, Download, FileDown, Package } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { LanguageSwitcher } from './language-switcher';
@@ -156,7 +147,6 @@ export function Header({ currentSceneTitle }: HeaderProps) {
               </div>
             )}
           </div>
-
         </div>
 
         {/* Export Dropdown */}

@@ -309,7 +309,9 @@ export function getLayoutsFor(
  * Build a compact prompt description of all layouts, for injection into AI prompts.
  * Format: "id: description"
  */
-export function buildLayoutMenuForPrompt(slideType?: 'cover' | 'transition' | 'content' | 'end'): string {
+export function buildLayoutMenuForPrompt(
+  slideType?: 'cover' | 'transition' | 'content' | 'end',
+): string {
   const layouts = slideType ? getLayoutsFor(slideType) : SLIDE_LAYOUTS;
   return layouts.map((l) => `- **${l.id}**: ${l.description}`).join('\n');
 }

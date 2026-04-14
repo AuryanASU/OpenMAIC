@@ -46,11 +46,7 @@ export async function POST(req: NextRequest) {
 
     // Validate required fields
     if (!text || !audioId) {
-      return apiError(
-        'MISSING_REQUIRED_FIELD',
-        400,
-        'Missing required fields: text, audioId',
-      );
+      return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required fields: text, audioId');
     }
 
     if (!PLATFORM_FEATURES.ttsEnabled) {

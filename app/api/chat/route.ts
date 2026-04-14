@@ -63,10 +63,7 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: config.agentIds');
     }
 
-    const {
-      model: languageModel,
-      apiKey: resolvedApiKey,
-    } = await getPlatformModel();
+    const { model: languageModel, apiKey: resolvedApiKey } = await getPlatformModel();
 
     log.info('Processing request');
     log.info(
