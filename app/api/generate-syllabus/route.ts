@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
               model,
               system,
               prompt: user,
-              maxTokens: 4096,
+              maxTokens: 16384,
             },
             'syllabus-gen',
           );
