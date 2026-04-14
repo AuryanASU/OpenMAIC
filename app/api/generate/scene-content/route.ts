@@ -17,7 +17,7 @@ import type { AgentInfo } from '@/lib/generation/generation-pipeline';
 import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generation';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { getPlatformModel } from '@/lib/server/platform-config';
 
 const log = createLogger('Scene Content API');
 
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     };
 
     // ── Model resolution from request headers ──
-    const { model: languageModel, modelInfo, modelString } = await resolveModel({});
+    const { model: languageModel, modelInfo, modelString } = await getPlatformModel();
     outlineTitle = rawOutline?.title;
     resolvedModelString = modelString;
 

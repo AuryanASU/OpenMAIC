@@ -10,13 +10,10 @@ import { isCustomTTSProvider, isCustomASRProvider } from '@/lib/audio/types';
 import { ASR_PROVIDERS, DEFAULT_TTS_VOICES, TTS_PROVIDERS } from '@/lib/audio/constants';
 import { PDF_PROVIDERS } from '@/lib/pdf/constants';
 import type { PDFProviderId } from '@/lib/pdf/types';
-import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
-import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
-import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
 import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { createLogger } from '@/lib/logger';
-import { validateProvider, validateModel } from '@/lib/store/settings-validation';
+import { validateProvider } from '@/lib/store/settings-validation';
 
 const log = createLogger('Settings');
 
@@ -85,36 +82,6 @@ export interface SettingsState {
       enabled: boolean;
       isServerConfigured?: boolean;
       serverBaseUrl?: string;
-    }
-  >;
-
-  // Image Generation settings
-  imageProviderId: ImageProviderId;
-  imageModelId: string;
-  imageProvidersConfig: Record<
-    ImageProviderId,
-    {
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      isServerConfigured?: boolean;
-      serverBaseUrl?: string;
-      customModels?: Array<{ id: string; name: string }>;
-    }
-  >;
-
-  // Video Generation settings
-  videoProviderId: VideoProviderId;
-  videoModelId: string;
-  videoProvidersConfig: Record<
-    VideoProviderId,
-    {
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      isServerConfigured?: boolean;
-      serverBaseUrl?: string;
-      customModels?: Array<{ id: string; name: string }>;
     }
   >;
 
@@ -228,32 +195,6 @@ export interface SettingsState {
     config: Partial<{ apiKey: string; baseUrl: string; enabled: boolean }>,
   ) => void;
 
-  // Image Generation actions
-  setImageProvider: (providerId: ImageProviderId) => void;
-  setImageModelId: (modelId: string) => void;
-  setImageProviderConfig: (
-    providerId: ImageProviderId,
-    config: Partial<{
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      customModels: Array<{ id: string; name: string }>;
-    }>,
-  ) => void;
-
-  // Video Generation actions
-  setVideoProvider: (providerId: VideoProviderId) => void;
-  setVideoModelId: (modelId: string) => void;
-  setVideoProviderConfig: (
-    providerId: VideoProviderId,
-    config: Partial<{
-      apiKey: string;
-      baseUrl: string;
-      enabled: boolean;
-      customModels: Array<{ id: string; name: string }>;
-    }>,
-  ) => void;
-
   // Media generation toggle actions
   setImageGenerationEnabled: (enabled: boolean) => void;
   setVideoGenerationEnabled: (enabled: boolean) => void;
@@ -305,33 +246,6 @@ const getDefaultPDFConfig = () => ({
   } as Record<PDFProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
 
-// Initialize default Image config
-const getDefaultImageConfig = () => ({
-  imageProviderId: 'seedream' as ImageProviderId,
-  imageModelId: 'doubao-seedream-5-0-260128',
-  imageProvidersConfig: {
-    seedream: { apiKey: '', baseUrl: '', enabled: false },
-    'qwen-image': { apiKey: '', baseUrl: '', enabled: false },
-    'nano-banana': { apiKey: '', baseUrl: '', enabled: false },
-    'minimax-image': { apiKey: '', baseUrl: '', enabled: false },
-    'grok-image': { apiKey: '', baseUrl: '', enabled: false },
-  } as Record<ImageProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
-});
-
-// Initialize default Video config
-const getDefaultVideoConfig = () => ({
-  videoProviderId: 'seedance' as VideoProviderId,
-  videoModelId: 'doubao-seedance-1-5-pro-251215',
-  videoProvidersConfig: {
-    seedance: { apiKey: '', baseUrl: '', enabled: false },
-    kling: { apiKey: '', baseUrl: '', enabled: false },
-    veo: { apiKey: '', baseUrl: '', enabled: false },
-    sora: { apiKey: '', baseUrl: '', enabled: false },
-    'minimax-video': { apiKey: '', baseUrl: '', enabled: false },
-    'grok-video': { apiKey: '', baseUrl: '', enabled: false },
-  } as Record<VideoProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
-});
-
 // Initialize default Web Search config
 const getDefaultWebSearchConfig = () => ({
   webSearchProviderId: 'tavily' as WebSearchProviderId,
@@ -355,8 +269,6 @@ function hasProviderId(providerMap: Record<string, unknown>, providerId?: string
 function ensureValidProviderSelections(state: Partial<SettingsState>): void {
   const defaultAudioConfig = getDefaultAudioConfig();
   const defaultPdfConfig = getDefaultPDFConfig();
-  const defaultImageConfig = getDefaultImageConfig();
-  const defaultVideoConfig = getDefaultVideoConfig();
   const defaultWebSearchConfig = getDefaultWebSearchConfig();
 
   if (!hasProviderId(PDF_PROVIDERS, state.pdfProviderId)) {
@@ -365,14 +277,6 @@ function ensureValidProviderSelections(state: Partial<SettingsState>): void {
 
   if (!hasProviderId(WEB_SEARCH_PROVIDERS, state.webSearchProviderId)) {
     state.webSearchProviderId = defaultWebSearchConfig.webSearchProviderId;
-  }
-
-  if (!hasProviderId(IMAGE_PROVIDERS, state.imageProviderId)) {
-    state.imageProviderId = defaultImageConfig.imageProviderId;
-  }
-
-  if (!hasProviderId(VIDEO_PROVIDERS, state.videoProviderId)) {
-    state.videoProviderId = defaultVideoConfig.videoProviderId;
   }
 
   if (
@@ -398,36 +302,6 @@ function ensureValidProviderSelections(state: Partial<SettingsState>): void {
   ) {
     state.asrProviderId = defaultAudioConfig.asrProviderId;
   }
-}
-
-/**
- * Ensure imageProvidersConfig includes all built-in image providers.
- * Called on every rehydrate so newly added image providers appear automatically.
- */
-function ensureBuiltInImageProviders(state: Partial<SettingsState>): void {
-  if (!state.imageProvidersConfig) return;
-  const defaultConfig = getDefaultImageConfig().imageProvidersConfig;
-  Object.keys(IMAGE_PROVIDERS).forEach((pid) => {
-    const providerId = pid as ImageProviderId;
-    if (!state.imageProvidersConfig![providerId]) {
-      state.imageProvidersConfig![providerId] = defaultConfig[providerId];
-    }
-  });
-}
-
-/**
- * Ensure videoProvidersConfig includes all built-in video providers.
- * Called on every rehydrate so newly added video providers appear automatically.
- */
-function ensureBuiltInVideoProviders(state: Partial<SettingsState>): void {
-  if (!state.videoProvidersConfig) return;
-  const defaultConfig = getDefaultVideoConfig().videoProvidersConfig;
-  Object.keys(VIDEO_PROVIDERS).forEach((pid) => {
-    const providerId = pid as VideoProviderId;
-    if (!state.videoProvidersConfig![providerId]) {
-      state.videoProvidersConfig![providerId] = defaultConfig[providerId];
-    }
-  });
 }
 
 // Migrate from old localStorage format
@@ -478,8 +352,6 @@ export const useSettingsStore = create<SettingsState>()(
       const migratedData = migrateFromOldStorage();
       const defaultAudioConfig = getDefaultAudioConfig();
       const defaultPDFConfig = getDefaultPDFConfig();
-      const defaultImageConfig = getDefaultImageConfig();
-      const defaultVideoConfig = getDefaultVideoConfig();
       const defaultWebSearchConfig = getDefaultWebSearchConfig();
 
       return {
@@ -506,12 +378,6 @@ export const useSettingsStore = create<SettingsState>()(
 
         // PDF settings (use defaults)
         ...defaultPDFConfig,
-
-        // Image settings (use defaults)
-        ...defaultImageConfig,
-
-        // Video settings (use defaults)
-        ...defaultVideoConfig,
 
         // Media generation toggles (off by default)
         imageGenerationEnabled: false,
@@ -620,53 +486,9 @@ export const useSettingsStore = create<SettingsState>()(
             },
           })),
 
-        // Image Generation actions
-        setImageProvider: (providerId) => set({ imageProviderId: providerId }),
-        setImageModelId: (modelId) => set({ imageModelId: modelId }),
-
-        setImageProviderConfig: (providerId, config) =>
-          set((state) => ({
-            imageProvidersConfig: {
-              ...state.imageProvidersConfig,
-              [providerId]: {
-                ...state.imageProvidersConfig[providerId],
-                ...config,
-              },
-            },
-          })),
-
-        // Video Generation actions
-        setVideoProvider: (providerId) => set({ videoProviderId: providerId }),
-        setVideoModelId: (modelId) => set({ videoModelId: modelId }),
-
-        setVideoProviderConfig: (providerId, config) =>
-          set((state) => ({
-            videoProvidersConfig: {
-              ...state.videoProvidersConfig,
-              [providerId]: {
-                ...state.videoProvidersConfig[providerId],
-                ...config,
-              },
-            },
-          })),
-
         // Media generation toggle actions
-        setImageGenerationEnabled: (enabled) => {
-          if (enabled) {
-            const cfg = get().imageProvidersConfig;
-            const hasUsable = Object.values(cfg).some((c) => c.isServerConfigured || c.apiKey);
-            if (!hasUsable) return;
-          }
-          set({ imageGenerationEnabled: enabled });
-        },
-        setVideoGenerationEnabled: (enabled) => {
-          if (enabled) {
-            const cfg = get().videoProvidersConfig;
-            const hasUsable = Object.values(cfg).some((c) => c.isServerConfigured || c.apiKey);
-            if (!hasUsable) return;
-          }
-          set({ videoGenerationEnabled: enabled });
-        },
+        setImageGenerationEnabled: (enabled) => set({ imageGenerationEnabled: enabled }),
+        setVideoGenerationEnabled: (enabled) => set({ videoGenerationEnabled: enabled }),
         setTTSEnabled: (enabled) => set({ ttsEnabled: enabled }),
         setASREnabled: (enabled) => set({ asrEnabled: enabled }),
 
@@ -757,8 +579,6 @@ export const useSettingsStore = create<SettingsState>()(
               tts: Record<string, { baseUrl?: string }>;
               asr: Record<string, { baseUrl?: string }>;
               pdf: Record<string, { baseUrl?: string }>;
-              image: Record<string, { baseUrl?: string }>;
-              video: Record<string, { baseUrl?: string }>;
               webSearch: Record<string, { baseUrl?: string }>;
             };
 
@@ -832,54 +652,6 @@ export const useSettingsStore = create<SettingsState>()(
                 }
               }
 
-              // Merge Image providers
-              const newImageConfig = { ...state.imageProvidersConfig };
-              for (const pid of Object.keys(newImageConfig)) {
-                const key = pid as ImageProviderId;
-                if (newImageConfig[key]) {
-                  newImageConfig[key] = {
-                    ...newImageConfig[key],
-                    isServerConfigured: false,
-                    serverBaseUrl: undefined,
-                  };
-                }
-              }
-              for (const [pid, info] of Object.entries(data.image)) {
-                const key = pid as ImageProviderId;
-                if (newImageConfig[key]) {
-                  newImageConfig[key] = {
-                    ...newImageConfig[key],
-                    isServerConfigured: true,
-                    serverBaseUrl: info.baseUrl,
-                  };
-                }
-              }
-
-              // Merge Video providers
-              const newVideoConfig = { ...state.videoProvidersConfig };
-              for (const pid of Object.keys(newVideoConfig)) {
-                const key = pid as VideoProviderId;
-                if (newVideoConfig[key]) {
-                  newVideoConfig[key] = {
-                    ...newVideoConfig[key],
-                    isServerConfigured: false,
-                    serverBaseUrl: undefined,
-                  };
-                }
-              }
-              if (data.video) {
-                for (const [pid, info] of Object.entries(data.video)) {
-                  const key = pid as VideoProviderId;
-                  if (newVideoConfig[key]) {
-                    newVideoConfig[key] = {
-                      ...newVideoConfig[key],
-                      isServerConfigured: true,
-                      serverBaseUrl: info.baseUrl,
-                    };
-                  }
-                }
-              }
-
               // Merge Web Search config — reset all first, then mark server-configured
               const newWebSearchConfig = { ...state.webSearchProvidersConfig };
               for (const key of Object.keys(newWebSearchConfig) as WebSearchProviderId[]) {
@@ -918,8 +690,6 @@ export const useSettingsStore = create<SettingsState>()(
               const ttsFallback = buildFallback<TTSProviderId>(newTTSConfig);
               const asrFallback = buildFallback<ASRProviderId>(newASRConfig);
               const pdfFallback = buildFallback<PDFProviderId>(newPDFConfig);
-              const imageFallback = buildFallback<ImageProviderId>(newImageConfig);
-              const videoFallback = buildFallback<VideoProviderId>(newVideoConfig);
 
               const validTTSProvider = validateProvider(
                 state.ttsProviderId,
@@ -939,48 +709,6 @@ export const useSettingsStore = create<SettingsState>()(
                 pdfFallback,
                 'unpdf' as PDFProviderId,
               );
-              let validImageProvider = validateProvider(
-                state.imageProviderId,
-                newImageConfig,
-                imageFallback,
-              );
-              let validVideoProvider = validateProvider(
-                state.videoProviderId,
-                newVideoConfig,
-                videoFallback,
-              );
-
-              // Auto-recover: when provider is empty but server has available ones
-              let recoveredImageModel = '';
-              if (!validImageProvider && imageFallback.length > 0) {
-                validImageProvider = imageFallback[0];
-                const models = IMAGE_PROVIDERS[validImageProvider as ImageProviderId]?.models;
-                if (models?.length) recoveredImageModel = models[0].id;
-              }
-              let recoveredVideoModel = '';
-              if (!validVideoProvider && videoFallback.length > 0) {
-                validVideoProvider = videoFallback[0];
-                const models = VIDEO_PROVIDERS[validVideoProvider as VideoProviderId]?.models;
-                if (models?.length) recoveredVideoModel = models[0].id;
-              }
-
-              const imageModels =
-                IMAGE_PROVIDERS[validImageProvider as ImageProviderId]?.models ?? [];
-              const validImageModel = validImageProvider
-                ? recoveredImageModel ||
-                  validateModel(state.imageModelId, imageModels) ||
-                  // validateModel('', ...) returns '' — fallback to first model when modelId is empty
-                  imageModels[0]?.id ||
-                  ''
-                : '';
-              const videoModels =
-                VIDEO_PROVIDERS[validVideoProvider as VideoProviderId]?.models ?? [];
-              const validVideoModel = validVideoProvider
-                ? recoveredVideoModel ||
-                  validateModel(state.videoModelId, videoModels) ||
-                  videoModels[0]?.id ||
-                  ''
-                : '';
 
               const validTTSVoice =
                 validTTSProvider !== state.ttsProviderId
@@ -988,20 +716,11 @@ export const useSettingsStore = create<SettingsState>()(
                   : state.ttsVoice;
 
               // Auto-disable image/video generation when no provider is usable
-              const shouldDisableImage = !validImageProvider && state.imageGenerationEnabled;
-              const shouldDisableVideo = !validVideoProvider && state.videoGenerationEnabled;
-
               // === Auto-select / auto-enable (only on first run) ===
               let autoTtsProvider: TTSProviderId | undefined;
               let autoTtsVoice: string | undefined;
               let autoAsrProvider: ASRProviderId | undefined;
               let autoPdfProvider: PDFProviderId | undefined;
-              let autoImageProvider: ImageProviderId | undefined;
-              let autoImageModel: string | undefined;
-              let autoVideoProvider: VideoProviderId | undefined;
-              let autoVideoModel: string | undefined;
-              let autoImageEnabled: boolean | undefined;
-              let autoVideoEnabled: boolean | undefined;
 
               // PDF: unpdf → mineru if server has it
               if (newPDFConfig.mineru?.isServerConfigured && state.pdfProviderId === 'unpdf') {
@@ -1028,40 +747,10 @@ export const useSettingsStore = create<SettingsState>()(
                 autoAsrProvider = serverAsrIds[0];
               }
 
-              // Image: first server provider
-              const serverImageIds = Object.keys(data.image) as ImageProviderId[];
-              if (
-                serverImageIds.length > 0 &&
-                !newImageConfig[state.imageProviderId]?.isServerConfigured
-              ) {
-                autoImageProvider = serverImageIds[0];
-                const models = IMAGE_PROVIDERS[autoImageProvider]?.models;
-                if (models?.length) autoImageModel = models[0].id;
-              }
-              if (serverImageIds.length > 0 && !state.imageGenerationEnabled) {
-                autoImageEnabled = true;
-              }
-
-              // Video: first server provider
-              const serverVideoIds = Object.keys(data.video || {}) as VideoProviderId[];
-              if (
-                serverVideoIds.length > 0 &&
-                !newVideoConfig[state.videoProviderId]?.isServerConfigured
-              ) {
-                autoVideoProvider = serverVideoIds[0];
-                const models = VIDEO_PROVIDERS[autoVideoProvider]?.models;
-                if (models?.length) autoVideoModel = models[0].id;
-              }
-              if (serverVideoIds.length > 0 && !state.videoGenerationEnabled) {
-                autoVideoEnabled = true;
-              }
-
               return {
                 ttsProvidersConfig: newTTSConfig,
                 asrProvidersConfig: newASRConfig,
                 pdfProvidersConfig: newPDFConfig,
-                imageProvidersConfig: newImageConfig,
-                videoProvidersConfig: newVideoConfig,
                 webSearchProvidersConfig: newWebSearchConfig,
                 // Validated selections
                 ...(validTTSProvider !== state.ttsProviderId && {
@@ -1074,20 +763,6 @@ export const useSettingsStore = create<SettingsState>()(
                 ...(validPDFProvider !== state.pdfProviderId && {
                   pdfProviderId: validPDFProvider as PDFProviderId,
                 }),
-                ...(validImageProvider !== state.imageProviderId && {
-                  imageProviderId: validImageProvider as ImageProviderId,
-                }),
-                ...(validImageModel !== state.imageModelId && {
-                  imageModelId: validImageModel,
-                }),
-                ...(validVideoProvider !== state.videoProviderId && {
-                  videoProviderId: validVideoProvider as VideoProviderId,
-                }),
-                ...(validVideoModel !== state.videoModelId && {
-                  videoModelId: validVideoModel,
-                }),
-                ...(shouldDisableImage && { imageGenerationEnabled: false }),
-                ...(shouldDisableVideo && { videoGenerationEnabled: false }),
                 // Auto-select overrides validation: picks best server provider each sync.
                 ...(autoPdfProvider && { pdfProviderId: autoPdfProvider }),
                 ...(autoTtsProvider && {
@@ -1095,20 +770,6 @@ export const useSettingsStore = create<SettingsState>()(
                   ttsVoice: autoTtsVoice,
                 }),
                 ...(autoAsrProvider && { asrProviderId: autoAsrProvider }),
-                ...(autoImageProvider && {
-                  imageProviderId: autoImageProvider,
-                }),
-                ...(autoImageModel && { imageModelId: autoImageModel }),
-                ...(autoVideoProvider && {
-                  videoProviderId: autoVideoProvider,
-                }),
-                ...(autoVideoModel && { videoModelId: autoVideoModel }),
-                ...(autoImageEnabled !== undefined && {
-                  imageGenerationEnabled: autoImageEnabled,
-                }),
-                ...(autoVideoEnabled !== undefined && {
-                  videoGenerationEnabled: autoVideoEnabled,
-                }),
               };
             });
           } catch (e) {
@@ -1124,10 +785,6 @@ export const useSettingsStore = create<SettingsState>()(
       // Migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<SettingsState>;
-
-        // Ensure image/video configs have all built-in providers
-        ensureBuiltInImageProviders(state);
-        ensureBuiltInVideoProviders(state);
 
         // Migrate from old ttsModel to new ttsProviderId
         if (state.ttsModel && !state.ttsProviderId) {
@@ -1180,18 +837,6 @@ export const useSettingsStore = create<SettingsState>()(
         if (!state.pdfProvidersConfig) {
           const defaultPDFConfig = getDefaultPDFConfig();
           Object.assign(state, defaultPDFConfig);
-        }
-
-        // Add default Image config if missing
-        if (!state.imageProvidersConfig) {
-          const defaultImageConfig = getDefaultImageConfig();
-          Object.assign(state, defaultImageConfig);
-        }
-
-        // Add default Video config if missing
-        if (!state.videoProvidersConfig) {
-          const defaultVideoConfig = getDefaultVideoConfig();
-          Object.assign(state, defaultVideoConfig);
         }
 
         // v1 → v2: Replace deep research with web search
@@ -1250,8 +895,6 @@ export const useSettingsStore = create<SettingsState>()(
       // so newly added providers/models appear without clearing cache.
       merge: (persistedState, currentState) => {
         const merged = { ...currentState, ...(persistedState as object) };
-        ensureBuiltInImageProviders(merged as Partial<SettingsState>);
-        ensureBuiltInVideoProviders(merged as Partial<SettingsState>);
         ensureValidProviderSelections(merged as Partial<SettingsState>);
         return merged as SettingsState;
       },

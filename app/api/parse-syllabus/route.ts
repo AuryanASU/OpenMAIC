@@ -10,7 +10,7 @@
 
 import { NextRequest } from 'next/server';
 import { callLLM } from '@/lib/ai/llm';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { getPlatformModel } from '@/lib/server/platform-config';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { nanoid } from 'nanoid';
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve model
-    const { model } = await resolveModel({});
+    const { model } = await getPlatformModel();
 
     // Extract PDF text
     const arrayBuffer = await file.arrayBuffer();

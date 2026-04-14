@@ -9,30 +9,16 @@ const log = createLogger('Verify PDF Provider');
 export async function POST(req: NextRequest) {
   let providerId: string | undefined;
   try {
-    const body = await req.json();
-    providerId = body.providerId;
-    const { apiKey, baseUrl } = body;
+    // On this managed platform, use the server-configured PDF provider
+    providerId = 'unpdf';
 
-    if (!providerId) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Provider ID is required');
-    }
-
-    const clientBaseUrl = (baseUrl as string | undefined) || undefined;
-    if (clientBaseUrl && process.env.NODE_ENV === 'production') {
-      const ssrfError = await validateUrlForSSRF(clientBaseUrl);
-      if (ssrfError) {
-        return apiError('INVALID_URL', 403, ssrfError);
-      }
-    }
-
-    const resolvedBaseUrl = clientBaseUrl ? clientBaseUrl : resolvePDFBaseUrl(providerId, baseUrl);
+    const resolvedBaseUrl = resolvePDFBaseUrl(providerId);
     if (!resolvedBaseUrl) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Base URL is required');
+      // unpdf is built-in and doesn't need a base URL
+      return apiSuccess({ message: 'Built-in PDF parser (unpdf) is available', status: 200 });
     }
 
-    const resolvedApiKey = clientBaseUrl
-      ? (apiKey as string | undefined) || ''
-      : resolvePDFApiKey(providerId, apiKey);
+    const resolvedApiKey = resolvePDFApiKey(providerId);
 
     const headers: Record<string, string> = {};
     if (resolvedApiKey) {

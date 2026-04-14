@@ -26,22 +26,11 @@ const log = createLogger('VerifyImageProvider');
 
 export async function POST(request: NextRequest) {
   try {
-    const providerId = (request.headers.get('x-image-provider') || 'seedream') as ImageProviderId;
-    const model = request.headers.get('x-image-model') || undefined;
-    const clientApiKey = request.headers.get('x-api-key') || undefined;
-    const clientBaseUrl = request.headers.get('x-base-url') || undefined;
+    const providerId = 'nano-banana' as ImageProviderId;
+    const model: string | undefined = undefined;
 
-    if (clientBaseUrl && process.env.NODE_ENV === 'production') {
-      const ssrfError = await validateUrlForSSRF(clientBaseUrl);
-      if (ssrfError) {
-        return apiError('INVALID_URL', 403, ssrfError);
-      }
-    }
-
-    const apiKey = clientBaseUrl
-      ? clientApiKey || ''
-      : resolveImageApiKey(providerId, clientApiKey);
-    const baseUrl = clientBaseUrl ? clientBaseUrl : resolveImageBaseUrl(providerId, clientBaseUrl);
+    const apiKey = resolveImageApiKey(providerId);
+    const baseUrl = resolveImageBaseUrl(providerId);
 
     if (!apiKey) {
       return apiError('MISSING_API_KEY', 400, 'No API key configured');

@@ -29,27 +29,10 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useTTSPreview } from '@/lib/audio/use-tts-preview';
-import { IMAGE_PROVIDERS } from '@/lib/media/image-providers';
-import { VIDEO_PROVIDERS } from '@/lib/media/video-providers';
 import { TTS_PROVIDERS, getTTSVoices, CUSTOM_ASR_DEFAULT_LANGUAGES } from '@/lib/audio/constants';
 import { ASR_PROVIDERS, getASRSupportedLanguages } from '@/lib/audio/constants';
-import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
 import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
 import { isCustomASRProvider } from '@/lib/audio/types';
-// ─── Provider icon maps ───
-const IMAGE_PROVIDER_ICONS: Record<string, string> = {
-  seedream: '/logos/doubao.svg',
-  'qwen-image': '/logos/bailian.svg',
-  'nano-banana': '/logos/gemini.svg',
-  'grok-image': '/logos/grok.svg',
-};
-const VIDEO_PROVIDER_ICONS: Record<string, string> = {
-  seedance: '/logos/doubao.svg',
-  kling: '/logos/kling.svg',
-  veo: '/logos/gemini.svg',
-  sora: '/logos/openai.svg',
-  'grok-video': '/logos/grok.svg',
-};
 
 type TabId = 'image' | 'video' | 'tts' | 'asr';
 
@@ -115,18 +98,6 @@ export function MediaPopover() {
   const setTTSEnabled = useSettingsStore((s) => s.setTTSEnabled);
   const setASREnabled = useSettingsStore((s) => s.setASREnabled);
 
-  const imageProviderId = useSettingsStore((s) => s.imageProviderId);
-  const imageModelId = useSettingsStore((s) => s.imageModelId);
-  const imageProvidersConfig = useSettingsStore((s) => s.imageProvidersConfig);
-  const setImageProvider = useSettingsStore((s) => s.setImageProvider);
-  const setImageModelId = useSettingsStore((s) => s.setImageModelId);
-
-  const videoProviderId = useSettingsStore((s) => s.videoProviderId);
-  const videoModelId = useSettingsStore((s) => s.videoModelId);
-  const videoProvidersConfig = useSettingsStore((s) => s.videoProvidersConfig);
-  const setVideoProvider = useSettingsStore((s) => s.setVideoProvider);
-  const setVideoModelId = useSettingsStore((s) => s.setVideoModelId);
-
   const ttsProviderId = useSettingsStore((s) => s.ttsProviderId);
   const ttsVoice = useSettingsStore((s) => s.ttsVoice);
   const ttsSpeed = useSettingsStore((s) => s.ttsSpeed);
@@ -170,41 +141,6 @@ export function MediaPopover() {
     window.speechSynthesis.addEventListener('voiceschanged', load);
     return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
   }, []);
-
-  // ─── Grouped select data (only available providers) ───
-  const imageGroups = useMemo(
-    () =>
-      Object.values(IMAGE_PROVIDERS)
-        .filter((p) => cfgOk(imageProvidersConfig, p.id, p.requiresApiKey))
-        .map((p) => ({
-          groupId: p.id,
-          groupName: p.name,
-          groupIcon: IMAGE_PROVIDER_ICONS[p.id],
-          available: true,
-          items: [...p.models, ...(imageProvidersConfig[p.id]?.customModels || [])].map((m) => ({
-            id: m.id,
-            name: m.name,
-          })),
-        })),
-    [imageProvidersConfig],
-  );
-
-  const videoGroups = useMemo(
-    () =>
-      Object.values(VIDEO_PROVIDERS)
-        .filter((p) => cfgOk(videoProvidersConfig, p.id, p.requiresApiKey))
-        .map((p) => ({
-          groupId: p.id,
-          groupName: p.name,
-          groupIcon: VIDEO_PROVIDER_ICONS[p.id],
-          available: true,
-          items: [...p.models, ...(videoProvidersConfig[p.id]?.customModels || [])].map((m) => ({
-            id: m.id,
-            name: m.name,
-          })),
-        })),
-    [videoProvidersConfig],
-  );
 
   // TTS: grouped by provider, voices as items (matching Image/Video pattern)
   // Browser-native voices are split into sub-groups by language.
@@ -391,15 +327,9 @@ export function MediaPopover() {
               enabled={imageGenerationEnabled}
               onToggle={setImageGenerationEnabled}
             >
-              <GroupedSelect
-                groups={imageGroups}
-                selectedGroupId={imageProviderId}
-                selectedItemId={imageModelId}
-                onSelect={(gid, iid) => {
-                  setImageProvider(gid as ImageProviderId);
-                  setImageModelId(iid);
-                }}
-              />
+              <p className="text-[11px] text-muted-foreground/60">
+                {t('settings.imageProviderManaged')}
+              </p>
             </TabPanel>
           )}
 
@@ -410,15 +340,9 @@ export function MediaPopover() {
               enabled={videoGenerationEnabled}
               onToggle={setVideoGenerationEnabled}
             >
-              <GroupedSelect
-                groups={videoGroups}
-                selectedGroupId={videoProviderId}
-                selectedItemId={videoModelId}
-                onSelect={(gid, iid) => {
-                  setVideoProvider(gid as VideoProviderId);
-                  setVideoModelId(iid);
-                }}
-              />
+              <p className="text-[11px] text-muted-foreground/60">
+                {t('settings.videoProviderManaged')}
+              </p>
             </TabPanel>
           )}
 

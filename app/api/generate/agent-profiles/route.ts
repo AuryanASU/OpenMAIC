@@ -10,7 +10,7 @@ import { nanoid } from 'nanoid';
 import { callLLM } from '@/lib/ai/llm';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { getPlatformModel } from '@/lib/server/platform-config';
 import { AGENT_COLOR_PALETTE } from '@/lib/constants/agent-defaults';
 
 const log = createLogger('Agent Profiles API');
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Model resolution from request headers ──
-    const { model: languageModel, modelString: _modelString } = await resolveModel({});
+    const { model: languageModel, modelString: _modelString } = await getPlatformModel();
     modelString = _modelString;
 
     // ── Build prompt ──

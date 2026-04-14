@@ -522,6 +522,8 @@
     "enableTTS": "Enable Text-to-Speech",
     "ttsEnabledDescription": "When enabled, speech audio will be generated during course creation",
     "ttsVoiceConfigHint": "Per-agent voice can be configured in \"Classroom Role Config\" on the homepage",
+    "imageProviderManaged": "Image generation is powered by the platform. No configuration needed.",
+    "videoProviderManaged": "Video generation is powered by the platform. No configuration needed.",
     "enableASR": "Enable Speech Recognition",
     "asrEnabledDescription": "When enabled, students can use microphone for voice input",
     "ttsProvider": "TTS Provider",

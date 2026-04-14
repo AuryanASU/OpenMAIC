@@ -25,7 +25,7 @@ import type {
 import type { SpeechAction } from '@/lib/types/action';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { getPlatformModel } from '@/lib/server/platform-config';
 
 const log = createLogger('Scene Actions API');
 
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Model resolution from request headers ──
-    const { model: languageModel, modelInfo, modelString } = await resolveModel({});
+    const { model: languageModel, modelInfo, modelString } = await getPlatformModel();
     outlineTitle = outline?.title;
     resolvedModelString = modelString;
 

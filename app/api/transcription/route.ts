@@ -17,8 +17,6 @@ export async function POST(req: NextRequest) {
     const providerId = formData.get('providerId') as ASRProviderId | null;
     const modelId = formData.get('modelId') as string | null;
     const language = formData.get('language') as string | null;
-    const apiKey = formData.get('apiKey') as string | null;
-    const baseUrl = formData.get('baseUrl') as string | null;
 
     if (!audioFile) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Audio file is required');

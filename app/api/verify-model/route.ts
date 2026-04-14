@@ -8,24 +8,12 @@ const log = createLogger('Verify Model');
 export async function POST(req: NextRequest) {
   let model: string | undefined;
   try {
-    const body = await req.json();
-    const { apiKey, baseUrl, providerType } = body;
-    model = body.model;
-
-    if (!model) {
-      return apiError('MISSING_REQUIRED_FIELD', 400, 'Model name is required');
-    }
-
-    // Parse model string and resolve server-side fallback
+    // On this managed platform, we always verify the server-configured model
     let languageModel;
     try {
-      const result = await resolveModel({
-        modelString: model,
-        apiKey: apiKey || '',
-        baseUrl: baseUrl || undefined,
-        providerType,
-      });
+      const result = await resolveModel({});
       languageModel = result.model;
+      model = result.modelString;
     } catch (error) {
       return apiError(
         'INVALID_REQUEST',

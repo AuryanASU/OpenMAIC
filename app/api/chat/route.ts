@@ -18,7 +18,7 @@ import type { StatelessChatRequest, StatelessEvent } from '@/lib/types/chat';
 import type { ThinkingConfig } from '@/lib/types/provider';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { getPlatformModel } from '@/lib/server/platform-config';
 const log = createLogger('Chat API');
 
 // Allow streaming responses up to 60 seconds
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     const {
       model: languageModel,
       apiKey: resolvedApiKey,
-    } = await resolveModel({});
+    } = await getPlatformModel();
 
     log.info('Processing request');
     log.info(

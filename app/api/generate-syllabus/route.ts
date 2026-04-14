@@ -10,7 +10,7 @@
 
 import { NextRequest } from 'next/server';
 import { streamLLM } from '@/lib/ai/llm';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { getPlatformModel } from '@/lib/server/platform-config';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { nanoid } from 'nanoid';
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing required field: topic');
     }
 
-    const { model } = await resolveModel({});
+    const { model } = await getPlatformModel();
 
     const { system, user } = buildSyllabusPrompt(body);
 

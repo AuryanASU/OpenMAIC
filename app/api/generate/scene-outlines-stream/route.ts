@@ -34,7 +34,7 @@ import type { CourseSyllabus } from '@/lib/types/syllabus';
 import { syllabusToOutlines } from '@/lib/generation/outline-generator';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
-import { resolveModel } from '@/lib/server/resolve-model';
+import { getPlatformModel } from '@/lib/server/platform-config';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // Get API configuration from request headers
-    const { model: languageModel, modelInfo, modelString } = await resolveModel({});
+    const { model: languageModel, modelInfo, modelString } = await getPlatformModel();
     resolvedModelString = modelString;
 
     if (!body.requirements) {
@@ -191,9 +191,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build media generation policy based on enabled flags
-    const imageGenerationEnabled = req.headers.get('x-image-generation-enabled') === 'true';
-    const videoGenerationEnabled = req.headers.get('x-video-generation-enabled') === 'true';
+    // Build media generation policy based on platform feature flags
+    const { PLATFORM_FEATURES } = await import('@/lib/server/platform-config');
+    const imageGenerationEnabled = PLATFORM_FEATURES.imageGenEnabled;
+    const videoGenerationEnabled = PLATFORM_FEATURES.videoGenEnabled;
     let mediaGenerationPolicy = '';
     if (!imageGenerationEnabled && !videoGenerationEnabled) {
       mediaGenerationPolicy =
