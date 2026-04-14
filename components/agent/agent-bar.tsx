@@ -101,22 +101,14 @@ function AgentVoicePill({
       try {
         const controller = new AbortController();
         previewAbortRef.current = controller;
-        const providerConfig = ttsProvidersConfig[providerId];
         const res = await fetch('/api/generate/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             text: previewText,
             audioId: 'voice-preview',
-            ttsProviderId: providerId,
-            ttsModelId: modelId || providerConfig?.modelId,
             ttsVoice: voiceId,
             ttsSpeed: 1,
-            ttsApiKey: providerConfig?.apiKey,
-            ttsBaseUrl:
-              providerConfig?.serverBaseUrl ||
-              providerConfig?.baseUrl ||
-              providerConfig?.customDefaultBaseUrl,
           }),
           signal: controller.signal,
         });
@@ -328,22 +320,14 @@ function TeacherVoicePill({
       try {
         const controller = new AbortController();
         previewAbortRef.current = controller;
-        const providerConfig = ttsProvidersConfig[providerId];
         const res = await fetch('/api/generate/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             text: previewText,
             audioId: 'voice-preview',
-            ttsProviderId: providerId,
-            ttsModelId: modelId || providerConfig?.modelId,
             ttsVoice: voiceId,
             ttsSpeed: 1,
-            ttsApiKey: providerConfig?.apiKey,
-            ttsBaseUrl:
-              providerConfig?.serverBaseUrl ||
-              providerConfig?.baseUrl ||
-              providerConfig?.customDefaultBaseUrl,
           }),
           signal: controller.signal,
         });

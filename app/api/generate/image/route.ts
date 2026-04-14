@@ -17,12 +17,18 @@
 
 import { NextRequest } from 'next/server';
 import { generateImage, aspectRatioToDimensions } from '@/lib/media/image-providers';
-import { resolveImageApiKey, resolveImageBaseUrl } from '@/lib/server/provider-config';
+import {
+  PLATFORM_IMAGE_API_KEY,
+  PLATFORM_FEATURES,
+} from '@/lib/server/platform-config';
 import type { ImageProviderId, ImageGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 
 const log = createLogger('ImageGeneration API');
+
+// Platform-managed image provider
+const PLATFORM_IMAGE_PROVIDER = 'nano-banana' as ImageProviderId;
 
 export const maxDuration = 60;
 
@@ -34,10 +40,14 @@ export async function POST(request: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing prompt');
     }
 
-    const providerId = (request.headers.get('x-image-provider') || 'seedream') as ImageProviderId;
-    const clientModel = request.headers.get('x-image-model') || undefined;
+    if (!PLATFORM_FEATURES.imageGenEnabled) {
+      return apiError('MISSING_API_KEY', 503, 'Image generation is not available on this platform');
+    }
 
-    const apiKey = resolveImageApiKey(providerId, undefined);
+    const providerId = PLATFORM_IMAGE_PROVIDER;
+    const clientModel: string | undefined = undefined;
+
+    const apiKey = PLATFORM_IMAGE_API_KEY;
     if (!apiKey) {
       return apiError(
         'MISSING_API_KEY',
@@ -46,7 +56,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const baseUrl = resolveImageBaseUrl(providerId, undefined);
+    const baseUrl = undefined;
 
     // Resolve dimensions from aspect ratio if not explicitly set
     if (!body.width && !body.height && body.aspectRatio) {

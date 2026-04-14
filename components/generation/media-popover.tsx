@@ -8,7 +8,6 @@ import {
   Volume2,
   Mic,
   SlidersHorizontal,
-  ChevronRight,
   Play,
   Loader2,
 } from 'lucide-react';
@@ -37,12 +36,6 @@ import { ASR_PROVIDERS, getASRSupportedLanguages } from '@/lib/audio/constants';
 import type { ImageProviderId, VideoProviderId } from '@/lib/media/types';
 import type { TTSProviderId, ASRProviderId } from '@/lib/audio/types';
 import { isCustomASRProvider } from '@/lib/audio/types';
-import type { SettingsSection } from '@/lib/types/settings';
-
-interface MediaPopoverProps {
-  onSettingsOpen?: (section: SettingsSection) => void;
-}
-
 // ─── Provider icon maps ───
 const IMAGE_PROVIDER_ICONS: Record<string, string> = {
   seedream: '/logos/doubao.svg',
@@ -106,7 +99,7 @@ function getVoiceDisplayName(name: string, lang: string): string {
   return name;
 }
 
-export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
+export function MediaPopover() {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('image');
@@ -462,19 +455,6 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
           )}
         </div>
 
-        {/* ── Footer ── */}
-        <div className="border-t border-border/40">
-          <button
-            onClick={() => {
-              setOpen(false);
-              onSettingsOpen?.(activeTab);
-            }}
-            className="w-full flex items-center justify-between px-3.5 py-2.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-          >
-            <span>{t('toolbar.advancedSettings')}</span>
-            <ChevronRight className="size-3" />
-          </button>
-        </div>
       </PopoverContent>
     </Popover>
   );

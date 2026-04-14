@@ -92,21 +92,15 @@ export function useTTSPreview() {
         }
 
         // API-based TTS
-        const body: Record<string, unknown> = {
-          text: options.text,
-          audioId: 'preview',
-          ttsProviderId: options.providerId,
-          ttsModelId: options.modelId,
-          ttsVoice: options.voice,
-          ttsSpeed: options.speed,
-        };
-        if (options.apiKey?.trim()) body.ttsApiKey = options.apiKey;
-        if (options.baseUrl?.trim()) body.ttsBaseUrl = options.baseUrl;
-
         const res = await fetch('/api/generate/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            text: options.text,
+            audioId: 'preview',
+            ttsVoice: options.voice,
+            ttsSpeed: options.speed,
+          }),
         });
         if (isStale()) return;
 

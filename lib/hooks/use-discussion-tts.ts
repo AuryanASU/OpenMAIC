@@ -147,22 +147,14 @@ export function useDiscussionTTS({ enabled, agents, onAudioStateChange }: Discus
     abortControllerRef.current = controller;
 
     try {
-      const providerConfig = ttsProvidersConfig[item.providerId];
       const res = await fetch('/api/generate/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: item.text,
           audioId: item.partId,
-          ttsProviderId: item.providerId,
-          ttsModelId: item.modelId || providerConfig?.modelId,
           ttsVoice: item.voiceId,
           ttsSpeed: ttsSpeed,
-          ttsApiKey: providerConfig?.apiKey,
-          ttsBaseUrl:
-            providerConfig?.serverBaseUrl ||
-            providerConfig?.baseUrl ||
-            providerConfig?.customDefaultBaseUrl,
         }),
         signal: controller.signal,
       });

@@ -3,24 +3,9 @@
 import { useState, useRef } from 'react';
 import { Globe, Paperclip, FileText, X, Globe2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
-import { useSettingsStore } from '@/lib/store/settings';
-import { PDF_PROVIDERS } from '@/lib/pdf/constants';
-import type { PDFProviderId } from '@/lib/pdf/types';
-import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
-import type { WebSearchProviderId } from '@/lib/web-search/types';
-import type { SettingsSection } from '@/lib/types/settings';
-import { MediaPopover } from '@/components/generation/media-popover';
-
 // ─── Constants ───────────────────────────────────────────────
 const MAX_PDF_SIZE_MB = 50;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
@@ -31,7 +16,6 @@ export interface GenerationToolbarProps {
   onLanguageChange: (lang: 'zh-CN' | 'en-US') => void;
   webSearch: boolean;
   onWebSearchChange: (v: boolean) => void;
-  onSettingsOpen?: (section?: SettingsSection) => void;
   // PDF
   pdfFile: File | null;
   onPdfFileChange: (file: File | null) => void;
@@ -44,29 +28,16 @@ export function GenerationToolbar({
   onLanguageChange,
   webSearch,
   onWebSearchChange,
-  onSettingsOpen,
   pdfFile,
   onPdfFileChange,
   onPdfError,
 }: GenerationToolbarProps) {
   const { t } = useI18n();
-  const pdfProviderId = useSettingsStore((s) => s.pdfProviderId);
-  const pdfProvidersConfig = useSettingsStore((s) => s.pdfProvidersConfig);
-  const setPDFProvider = useSettingsStore((s) => s.setPDFProvider);
-  const webSearchProviderId = useSettingsStore((s) => s.webSearchProviderId);
-  const webSearchProvidersConfig = useSettingsStore((s) => s.webSearchProvidersConfig);
-  const setWebSearchProvider = useSettingsStore((s) => s.setWebSearchProvider);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Check if the selected web search provider has a valid config (API key or server-configured)
-  const webSearchProvider = WEB_SEARCH_PROVIDERS[webSearchProviderId];
-  const webSearchConfig = webSearchProvidersConfig[webSearchProviderId];
-  const webSearchAvailable = webSearchProvider
-    ? !webSearchProvider.requiresApiKey ||
-      !!webSearchConfig?.apiKey ||
-      !!webSearchConfig?.isServerConfigured
-    : false;
+  // Web search is always available on the managed platform (server-configured Tavily)
+  const webSearchAvailable = true;
 
   // PDF handler
   const handleFileSelect = (file: File) => {
@@ -113,42 +84,8 @@ export function GenerationToolbar({
           )}
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-0">
-          {/* Parser selector */}
-          <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-            <span className="text-xs font-medium text-muted-foreground shrink-0">
-              {t('toolbar.pdfParser')}
-            </span>
-            <Select value={pdfProviderId} onValueChange={(v) => setPDFProvider(v as PDFProviderId)}>
-              <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.values(PDF_PROVIDERS).map((provider) => {
-                  const cfg = pdfProvidersConfig[provider.id];
-                  const available =
-                    !provider.requiresApiKey || !!cfg?.apiKey || !!cfg?.isServerConfigured;
-                  return (
-                    <SelectItem key={provider.id} value={provider.id} disabled={!available}>
-                      <div className={cn('flex items-center gap-1.5', !available && 'opacity-50')}>
-                        {provider.icon && (
-                          <img src={provider.icon} alt={provider.name} className="w-3.5 h-3.5" />
-                        )}
-                        {provider.name}
-                        {cfg?.isServerConfigured && (
-                          <span className="text-[9px] px-1 py-0 rounded border text-muted-foreground">
-                            {t('settings.serverConfigured')}
-                          </span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Upload area / file info */}
-          <div className="px-3 pb-3">
+          <div className="px-3 py-3">
             <input
               type="file"
               ref={fileInputRef}
@@ -218,12 +155,10 @@ export function GenerationToolbar({
           <PopoverTrigger asChild>
             <button className={webSearch ? pillActive : pillMuted}>
               <Globe2 className={cn('size-3.5', webSearch && 'animate-pulse')} />
-              {webSearch && (
-                <span>{WEB_SEARCH_PROVIDERS[webSearchProviderId]?.name || 'Search'}</span>
-              )}
+              {webSearch && <span>Search</span>}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-3 space-y-3">
+          <PopoverContent align="start" className="w-64 p-3">
             {/* Toggle */}
             <button
               onClick={() => onWebSearchChange(!webSearch)}
@@ -249,42 +184,6 @@ export function GenerationToolbar({
                 </p>
               </div>
             </button>
-
-            {/* Provider selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground shrink-0">
-                {t('toolbar.webSearchProvider')}
-              </span>
-              <Select
-                value={webSearchProviderId}
-                onValueChange={(v) => setWebSearchProvider(v as WebSearchProviderId)}
-              >
-                <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.values(WEB_SEARCH_PROVIDERS).map((provider) => {
-                    const cfg = webSearchProvidersConfig[provider.id];
-                    const available =
-                      !provider.requiresApiKey || !!cfg?.apiKey || !!cfg?.isServerConfigured;
-                    return (
-                      <SelectItem key={provider.id} value={provider.id} disabled={!available}>
-                        <div
-                          className={cn('flex items-center gap-1.5', !available && 'opacity-50')}
-                        >
-                          {provider.name}
-                          {cfg?.isServerConfigured && (
-                            <span className="text-[9px] px-1 py-0 rounded border text-muted-foreground">
-                              {t('settings.serverConfigured')}
-                            </span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
           </PopoverContent>
         </Popover>
       ) : (
@@ -312,11 +211,6 @@ export function GenerationToolbar({
         <TooltipContent>{t('toolbar.languageHint')}</TooltipContent>
       </Tooltip>
 
-      {/* ── Separator ── */}
-      <div className="w-px h-4 bg-border/60 mx-1" />
-
-      {/* ── Media popover ── */}
-      <MediaPopover onSettingsOpen={onSettingsOpen} />
     </div>
   );
 }

@@ -18,12 +18,18 @@
 
 import { NextRequest } from 'next/server';
 import { generateVideo, normalizeVideoOptions } from '@/lib/media/video-providers';
-import { resolveVideoApiKey, resolveVideoBaseUrl } from '@/lib/server/provider-config';
+import {
+  PLATFORM_VIDEO_API_KEY,
+  PLATFORM_FEATURES,
+} from '@/lib/server/platform-config';
 import type { VideoProviderId, VideoGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 
 const log = createLogger('VideoGeneration API');
+
+// Platform-managed video provider
+const PLATFORM_VIDEO_PROVIDER = 'veo' as VideoProviderId;
 
 export const maxDuration = 300;
 
@@ -35,10 +41,14 @@ export async function POST(request: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Missing prompt');
     }
 
-    const providerId = (request.headers.get('x-video-provider') || 'seedance') as VideoProviderId;
-    const clientModel = request.headers.get('x-video-model') || undefined;
+    if (!PLATFORM_FEATURES.videoGenEnabled) {
+      return apiError('MISSING_API_KEY', 503, 'Video generation is not available on this platform');
+    }
 
-    const apiKey = resolveVideoApiKey(providerId, undefined);
+    const providerId = PLATFORM_VIDEO_PROVIDER;
+    const clientModel: string | undefined = undefined;
+
+    const apiKey = PLATFORM_VIDEO_API_KEY;
     if (!apiKey) {
       return apiError(
         'MISSING_API_KEY',
@@ -47,7 +57,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const baseUrl = resolveVideoBaseUrl(providerId, undefined);
+    const baseUrl = undefined;
 
     // Normalize options against provider capabilities
     const options = normalizeVideoOptions(providerId, body);

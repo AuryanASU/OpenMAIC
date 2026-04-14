@@ -19,7 +19,6 @@ import {
   cleanupOldImages,
   storeImages,
 } from '@/lib/utils/image-storage';
-import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { db } from '@/lib/utils/database';
 import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
 import { nanoid } from 'nanoid';
@@ -89,29 +88,14 @@ function GenerationPreviewContent() {
     };
   }, []);
 
-  // Get API credentials from localStorage
+  // Build request headers for generation API calls.
+  // Provider credentials are managed server-side via platform config —
+  // we only forward feature-toggle state here.
   const getApiHeaders = () => {
-    const modelConfig = getCurrentModelConfig();
     const settings = useSettingsStore.getState();
-    const imageProviderConfig = settings.imageProvidersConfig?.[settings.imageProviderId];
-    const videoProviderConfig = settings.videoProvidersConfig?.[settings.videoProviderId];
     return {
       'Content-Type': 'application/json',
-      'x-model': modelConfig.modelString,
-      'x-api-key': modelConfig.apiKey,
-      'x-base-url': modelConfig.baseUrl,
-      'x-provider-type': modelConfig.providerType || '',
-      // Image generation provider
-      'x-image-provider': settings.imageProviderId || '',
-      'x-image-model': settings.imageModelId || '',
-      'x-image-api-key': imageProviderConfig?.apiKey || '',
-      'x-image-base-url': imageProviderConfig?.baseUrl || '',
-      // Video generation provider
-      'x-video-provider': settings.videoProviderId || '',
-      'x-video-model': settings.videoModelId || '',
-      'x-video-api-key': videoProviderConfig?.apiKey || '',
-      'x-video-base-url': videoProviderConfig?.baseUrl || '',
-      // Media generation toggles
+      // Media generation toggles (user can turn these on/off)
       'x-image-generation-enabled': String(settings.imageGenerationEnabled ?? false),
       'x-video-generation-enabled': String(settings.videoGenerationEnabled ?? false),
     };
@@ -179,15 +163,6 @@ function GenerationPreviewContent() {
         const parseFormData = new FormData();
         parseFormData.append('pdf', pdfFile);
 
-        if (currentSession.pdfProviderId) {
-          parseFormData.append('providerId', currentSession.pdfProviderId);
-        }
-        if (currentSession.pdfProviderConfig?.apiKey?.trim()) {
-          parseFormData.append('apiKey', currentSession.pdfProviderConfig.apiKey);
-        }
-        if (currentSession.pdfProviderConfig?.baseUrl?.trim()) {
-          parseFormData.append('baseUrl', currentSession.pdfProviderConfig.baseUrl);
-        }
 
         const parseResponse = await fetch('/api/parse-pdf', {
           method: 'POST',
@@ -299,16 +274,12 @@ function GenerationPreviewContent() {
         setCurrentStepIndex(webSearchStepIdx);
         setWebSearchSources([]);
 
-        const wsSettings = useSettingsStore.getState();
-        const wsApiKey =
-          wsSettings.webSearchProvidersConfig?.[wsSettings.webSearchProviderId]?.apiKey;
         const res = await fetch('/api/web-search', {
           method: 'POST',
-          headers: getApiHeaders(),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             query: currentSession.requirements.requirement,
             pdfText: currentSession.pdfText || undefined,
-            apiKey: wsApiKey || undefined,
           }),
           signal,
         });
@@ -709,7 +680,6 @@ function GenerationPreviewContent() {
 
       // Generate TTS for first scene (part of actions step — blocking)
       if (settings.ttsEnabled && settings.ttsProviderId !== 'browser-native-tts') {
-        const ttsProviderConfig = settings.ttsProvidersConfig?.[settings.ttsProviderId];
         const speechActions = (data.scene.actions || []).filter(
           (a: { type: string; text?: string }) => a.type === 'speech' && a.text,
         );
@@ -725,15 +695,8 @@ function GenerationPreviewContent() {
               body: JSON.stringify({
                 text: action.text,
                 audioId,
-                ttsProviderId: settings.ttsProviderId,
-                ttsModelId: ttsProviderConfig?.modelId,
                 ttsVoice: settings.ttsVoice,
                 ttsSpeed: settings.ttsSpeed,
-                ttsApiKey: ttsProviderConfig?.apiKey || undefined,
-                ttsBaseUrl:
-                  ttsProviderConfig?.baseUrl ||
-                  ttsProviderConfig?.customDefaultBaseUrl ||
-                  undefined,
               }),
               signal,
             });

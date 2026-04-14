@@ -9,12 +9,20 @@
 
 import { NextRequest } from 'next/server';
 import { generateTTS } from '@/lib/audio/tts-providers';
-import { resolveTTSApiKey, resolveTTSBaseUrl } from '@/lib/server/provider-config';
+import {
+  PLATFORM_TTS_API_KEY,
+  PLATFORM_TTS_MODEL,
+  PLATFORM_TTS_VOICE,
+  PLATFORM_FEATURES,
+} from '@/lib/server/platform-config';
 import type { TTSProviderId } from '@/lib/audio/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 
 const log = createLogger('TTS API');
+
+// Platform-managed TTS provider
+const PLATFORM_TTS_PROVIDER = 'elevenlabs-tts' as TTSProviderId;
 
 export const maxDuration = 30;
 
@@ -24,45 +32,44 @@ export async function POST(req: NextRequest) {
   let audioId: string | undefined;
   try {
     const body = await req.json();
-    const { text, ttsModelId, ttsSpeed, ttsApiKey, ttsBaseUrl } = body as {
+    const { text, ttsModelId, ttsSpeed } = body as {
       text: string;
       audioId: string;
-      ttsProviderId: TTSProviderId;
       ttsModelId?: string;
       ttsVoice: string;
       ttsSpeed?: number;
-      ttsApiKey?: string;
-      ttsBaseUrl?: string;
     };
-    ttsProviderId = body.ttsProviderId;
-    ttsVoice = body.ttsVoice;
+    ttsProviderId = PLATFORM_TTS_PROVIDER;
+    // Respect the requested voice if provided, otherwise use platform default
+    ttsVoice = (body.ttsVoice as string | undefined) || PLATFORM_TTS_VOICE;
     audioId = body.audioId;
 
     // Validate required fields
-    if (!text || !audioId || !ttsProviderId || !ttsVoice) {
+    if (!text || !audioId) {
       return apiError(
         'MISSING_REQUIRED_FIELD',
         400,
-        'Missing required fields: text, audioId, ttsProviderId, ttsVoice',
+        'Missing required fields: text, audioId',
       );
     }
 
-    // Reject browser-native TTS — must be handled client-side
-    if (ttsProviderId === 'browser-native-tts') {
-      return apiError('INVALID_REQUEST', 400, 'browser-native-tts must be handled client-side');
+    if (!PLATFORM_FEATURES.ttsEnabled) {
+      return apiError('MISSING_API_KEY', 503, 'TTS is not available on this platform');
     }
 
-    const apiKey = resolveTTSApiKey(ttsProviderId, undefined);
-    const baseUrl = resolveTTSBaseUrl(ttsProviderId, undefined);
+    const apiKey = PLATFORM_TTS_API_KEY;
+    if (!apiKey) {
+      return apiError('MISSING_API_KEY', 401, 'TTS API key is not configured');
+    }
 
     // Build TTS config
     const config = {
-      providerId: ttsProviderId as TTSProviderId,
-      modelId: ttsModelId,
+      providerId: PLATFORM_TTS_PROVIDER,
+      modelId: ttsModelId || PLATFORM_TTS_MODEL,
       voice: ttsVoice,
       speed: ttsSpeed ?? 1.0,
       apiKey,
-      baseUrl,
+      baseUrl: undefined,
     };
 
     log.info(
