@@ -66,6 +66,35 @@ export class MockApi {
     });
   }
 
+  /** Mock the syllabus generation SSE endpoint */
+  async mockGenerateSyllabus() {
+    await this.page.route('**/api/generate-syllabus', (route) => {
+      const syllabus = {
+        title: '光合作用',
+        description: 'A course about photosynthesis',
+        modules: [
+          {
+            title: '光合作用基础',
+            topics: ['光反应', '暗反应'],
+            duration: '1 week',
+            learningObjectives: ['Understand photosynthesis basics'],
+          },
+        ],
+        metadata: { source: 'generated', language: 'zh-CN' },
+      };
+      const event = `data: ${JSON.stringify({ syllabus })}\n\n`;
+      route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+        body: event,
+      });
+    });
+  }
+
   /** Mock the server providers endpoint (returns empty — client-side config only) */
   async mockServerProviders() {
     await this.page.route('**/api/server-providers', (route) => {
@@ -79,6 +108,7 @@ export class MockApi {
 
   /** Set up API mocks for the generation flow. Note: server-providers is already mocked by the base fixture. */
   async setupGenerationMocks(stageId?: string) {
+    await this.mockGenerateSyllabus();
     await this.mockSceneOutlinesStream();
     await this.mockSceneContent();
     await this.mockSceneActions(stageId);

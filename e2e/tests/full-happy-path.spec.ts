@@ -32,8 +32,13 @@ test.describe('Full Happy Path', () => {
     await home.fillRequirement('讲解光合作用');
     await expect(home.enterButton).toBeEnabled();
 
-    // Submit → navigate to generation-preview
+    // Submit → syllabus editor opens (syllabus-first flow)
     await home.submit();
+    const generateCourseBtn = page.getByRole('button', { name: /generate course/i });
+    await expect(generateCourseBtn).toBeVisible({ timeout: 10_000 });
+
+    // Click "Generate Course" → navigate to generation-preview
+    await generateCourseBtn.click();
     await page.waitForURL(/\/generation-preview/);
 
     // ── Phase 2: Generation preview ─────────────────────────────────────
@@ -46,7 +51,7 @@ test.describe('Full Happy Path', () => {
     await preview.waitForRedirectToClassroom();
     expect(page.url()).toMatch(/\/classroom\//);
 
-    // ── Phase 3: Classroom ──────────────────────────────────────────────
+    // ── Phase 3: Classroom ────────────────────────────────────────��─────
     const classroom = new ClassroomPage(page);
     await classroom.waitForLoaded();
 
