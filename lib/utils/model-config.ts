@@ -1,23 +1,24 @@
-import { useSettingsStore } from '@/lib/store/settings';
-
 /**
- * Get current model configuration from settings store
+ * Platform model configuration helper.
+ *
+ * Returns the platform's fixed model string so that generation-preview
+ * and other client-side callers that build request headers can reference
+ * a consistent model string without needing user-configurable settings.
+ *
+ * Note: the server always resolves the actual model + API key from
+ * environment variables (lib/server/platform-config.ts), so the values
+ * returned here are informational / for header forwarding only.
  */
+
 export function getCurrentModelConfig() {
-  const { providerId, modelId, providersConfig } = useSettingsStore.getState();
-  const modelString = `${providerId}:${modelId}`;
-
-  // Get current provider's config
-  const providerConfig = providersConfig[providerId];
-
   return {
-    providerId,
-    modelId,
-    modelString,
-    apiKey: providerConfig?.apiKey || '',
-    baseUrl: providerConfig?.baseUrl || '',
-    providerType: providerConfig?.type,
-    requiresApiKey: providerConfig?.requiresApiKey,
-    isServerConfigured: providerConfig?.isServerConfigured,
+    providerId: 'anthropic',
+    modelId: 'claude-sonnet-4-6',
+    modelString: 'anthropic:claude-sonnet-4-6',
+    apiKey: '',
+    baseUrl: '',
+    providerType: undefined as string | undefined,
+    requiresApiKey: false,
+    isServerConfigured: true,
   };
 }

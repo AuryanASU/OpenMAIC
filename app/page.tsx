@@ -12,7 +12,6 @@ import {
   ImagePlus,
   Pencil,
   Trash2,
-  Settings,
   Sun,
   Moon,
   Monitor,

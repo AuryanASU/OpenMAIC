@@ -5,9 +5,6 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ProviderId } from '@/lib/ai/providers';
-import type { ProvidersConfig } from '@/lib/types/settings';
-import { PROVIDERS } from '@/lib/ai/providers';
 import type { TTSProviderId, ASRProviderId, BuiltInTTSProviderId } from '@/lib/audio/types';
 import { isCustomTTSProvider, isCustomASRProvider } from '@/lib/audio/types';
 import { ASR_PROVIDERS, DEFAULT_TTS_VOICES, TTS_PROVIDERS } from '@/lib/audio/constants';
@@ -28,13 +25,6 @@ export const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 2] as const;
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
 
 export interface SettingsState {
-  // Model selection
-  providerId: ProviderId;
-  modelId: string;
-
-  // Provider configurations (unified JSON storage)
-  providersConfig: ProvidersConfig;
-
   // TTS settings (legacy, kept for backward compatibility)
   ttsModel: string;
 
@@ -149,9 +139,6 @@ export interface SettingsState {
   ttsEnabled: boolean;
   asrEnabled: boolean;
 
-  // Auto-config lifecycle flag (persisted)
-  autoConfigApplied: boolean;
-
   // Playback controls
   ttsMuted: boolean;
   ttsVolume: number; // 0-1, actual volume level
@@ -170,9 +157,6 @@ export interface SettingsState {
   chatAreaWidth: number;
 
   // Actions
-  setModel: (providerId: ProviderId, modelId: string) => void;
-  setProviderConfig: (providerId: ProviderId, config: Partial<ProvidersConfig[ProviderId]>) => void;
-  setProvidersConfig: (config: ProvidersConfig) => void;
   setTtsModel: (model: string) => void;
   setTTSMuted: (muted: boolean) => void;
   setTTSVolume: (volume: number) => void;
@@ -284,26 +268,6 @@ export interface SettingsState {
   // Server provider actions
   fetchServerProviders: () => Promise<void>;
 }
-
-// Initialize default providers config
-const getDefaultProvidersConfig = (): ProvidersConfig => {
-  const config: ProvidersConfig = {} as ProvidersConfig;
-  Object.keys(PROVIDERS).forEach((pid) => {
-    const provider = PROVIDERS[pid as ProviderId];
-    config[pid as ProviderId] = {
-      apiKey: '',
-      baseUrl: '',
-      models: provider.models,
-      name: provider.name,
-      type: provider.type,
-      defaultBaseUrl: provider.defaultBaseUrl,
-      icon: provider.icon,
-      requiresApiKey: provider.requiresApiKey,
-      isBuiltIn: true,
-    };
-  });
-  return config;
-};
 
 // Initialize default audio config
 const getDefaultAudioConfig = () => ({
@@ -437,43 +401,6 @@ function ensureValidProviderSelections(state: Partial<SettingsState>): void {
 }
 
 /**
- * Ensure providersConfig includes all built-in providers and their latest models.
- * Called on every rehydrate (not just version migrations) so new providers
- * added in code are always picked up without clearing cache.
- */
-function ensureBuiltInProviders(state: Partial<SettingsState>): void {
-  if (!state.providersConfig) return;
-  const defaultConfig = getDefaultProvidersConfig();
-  Object.keys(PROVIDERS).forEach((pid) => {
-    const providerId = pid as ProviderId;
-    if (!state.providersConfig![providerId]) {
-      // New provider: add with defaults
-      state.providersConfig![providerId] = defaultConfig[providerId];
-    } else {
-      // Existing provider: merge new models & metadata
-      const provider = PROVIDERS[providerId];
-      const existing = state.providersConfig![providerId];
-
-      const existingModelIds = new Set(existing.models?.map((m) => m.id) || []);
-      const newModels = provider.models.filter((m) => !existingModelIds.has(m.id));
-      const mergedModels =
-        newModels.length > 0 ? [...newModels, ...(existing.models || [])] : existing.models;
-
-      state.providersConfig![providerId] = {
-        ...existing,
-        models: mergedModels,
-        name: existing.name || provider.name,
-        type: existing.type || provider.type,
-        defaultBaseUrl: existing.defaultBaseUrl || provider.defaultBaseUrl,
-        icon: provider.icon || existing.icon,
-        requiresApiKey: existing.requiresApiKey ?? provider.requiresApiKey,
-        isBuiltIn: existing.isBuiltIn ?? true,
-      };
-    }
-  });
-}
-
-/**
  * Ensure imageProvidersConfig includes all built-in image providers.
  * Called on every rehydrate so newly added image providers appear automatically.
  */
@@ -512,35 +439,11 @@ const migrateFromOldStorage = () => {
   if (newStorage) return null; // Already migrated or new install
 
   // Read old localStorage keys
-  const oldLlmModel = localStorage.getItem('llmModel');
-  const oldProvidersConfig = localStorage.getItem('providersConfig');
   const oldTtsModel = localStorage.getItem('ttsModel');
   const oldSelectedAgents = localStorage.getItem('selectedAgentIds');
   const oldMaxTurns = localStorage.getItem('maxTurns');
 
-  if (!oldLlmModel && !oldProvidersConfig) return null; // No old data
-
-  // Parse model selection
-  let providerId: ProviderId = 'openai';
-  let modelId = 'gpt-4o-mini';
-  if (oldLlmModel) {
-    const [pid, mid] = oldLlmModel.split(':');
-    if (pid && mid) {
-      providerId = pid as ProviderId;
-      modelId = mid;
-    }
-  }
-
-  // Parse providers config
-  let providersConfig = getDefaultProvidersConfig();
-  if (oldProvidersConfig) {
-    try {
-      const parsed = JSON.parse(oldProvidersConfig);
-      providersConfig = { ...providersConfig, ...parsed };
-    } catch (e) {
-      log.error('Failed to parse old providersConfig:', e);
-    }
-  }
+  if (!oldTtsModel && !oldSelectedAgents && !oldMaxTurns) return null; // No old data
 
   // Parse other settings
   let ttsModel = 'openai-tts';
@@ -562,9 +465,6 @@ const migrateFromOldStorage = () => {
   if (oldMaxTurns) maxTurns = oldMaxTurns;
 
   return {
-    providerId,
-    modelId,
-    providersConfig,
     ttsModel,
     selectedAgentIds,
     maxTurns,
@@ -584,9 +484,6 @@ export const useSettingsStore = create<SettingsState>()(
 
       return {
         // Initial state (use migrated data if available)
-        providerId: migratedData?.providerId || 'openai',
-        modelId: migratedData?.modelId || '',
-        providersConfig: migratedData?.providersConfig || getDefaultProvidersConfig(),
         ttsModel: migratedData?.ttsModel || 'openai-tts',
         selectedAgentIds: migratedData?.selectedAgentIds || ['default-1', 'default-2', 'default-3'],
         maxTurns: migratedData?.maxTurns?.toString() || '10',
@@ -624,27 +521,10 @@ export const useSettingsStore = create<SettingsState>()(
         ttsEnabled: true,
         asrEnabled: true,
 
-        autoConfigApplied: false,
-
         // Web Search settings (use defaults)
         ...defaultWebSearchConfig,
 
         // Actions
-        setModel: (providerId, modelId) => set({ providerId, modelId }),
-
-        setProviderConfig: (providerId, config) =>
-          set((state) => ({
-            providersConfig: {
-              ...state.providersConfig,
-              [providerId]: {
-                ...state.providersConfig[providerId],
-                ...config,
-              },
-            },
-          })),
-
-        setProvidersConfig: (config) => set({ providersConfig: config }),
-
         setTtsModel: (model) => set({ ttsModel: model }),
 
         setTTSMuted: (muted) => set({ ttsMuted: muted }),
@@ -874,7 +754,6 @@ export const useSettingsStore = create<SettingsState>()(
             const res = await fetch('/api/server-providers');
             if (!res.ok) return;
             const data = (await res.json()) as {
-              providers: Record<string, { models?: string[]; baseUrl?: string }>;
               tts: Record<string, { baseUrl?: string }>;
               asr: Record<string, { baseUrl?: string }>;
               pdf: Record<string, { baseUrl?: string }>;
@@ -884,39 +763,6 @@ export const useSettingsStore = create<SettingsState>()(
             };
 
             set((state) => {
-              // Merge LLM providers
-              const newProvidersConfig = { ...state.providersConfig };
-              // First reset all server flags
-              for (const pid of Object.keys(newProvidersConfig)) {
-                const key = pid as ProviderId;
-                if (newProvidersConfig[key]) {
-                  newProvidersConfig[key] = {
-                    ...newProvidersConfig[key],
-                    isServerConfigured: false,
-                    serverModels: undefined,
-                    serverBaseUrl: undefined,
-                  };
-                }
-              }
-              // Set flags for server-configured providers
-              for (const [pid, info] of Object.entries(data.providers)) {
-                const key = pid as ProviderId;
-                if (newProvidersConfig[key]) {
-                  const currentModels = newProvidersConfig[key].models;
-                  // When server specifies allowed models, filter the models list
-                  const filteredModels = info.models?.length
-                    ? currentModels.filter((m) => info.models!.includes(m.id))
-                    : currentModels;
-                  newProvidersConfig[key] = {
-                    ...newProvidersConfig[key],
-                    isServerConfigured: true,
-                    serverModels: info.models,
-                    serverBaseUrl: info.baseUrl,
-                    models: filteredModels,
-                  };
-                }
-              }
-
               // Merge TTS providers
               const newTTSConfig = { ...state.ttsProvidersConfig };
               for (const pid of Object.keys(newTTSConfig)) {
@@ -1069,18 +915,12 @@ export const useSettingsStore = create<SettingsState>()(
                   .map(([id]) => id as T),
               ];
 
-              const llmFallback = buildFallback<ProviderId>(newProvidersConfig);
               const ttsFallback = buildFallback<TTSProviderId>(newTTSConfig);
               const asrFallback = buildFallback<ASRProviderId>(newASRConfig);
               const pdfFallback = buildFallback<PDFProviderId>(newPDFConfig);
               const imageFallback = buildFallback<ImageProviderId>(newImageConfig);
               const videoFallback = buildFallback<VideoProviderId>(newVideoConfig);
 
-              const validLLMProvider = validateProvider(
-                state.providerId,
-                newProvidersConfig,
-                llmFallback,
-              );
               const validTTSProvider = validateProvider(
                 state.ttsProviderId,
                 newTTSConfig,
@@ -1124,12 +964,6 @@ export const useSettingsStore = create<SettingsState>()(
                 if (models?.length) recoveredVideoModel = models[0].id;
               }
 
-              const validLLMModel = validLLMProvider
-                ? validateModel(
-                    state.modelId,
-                    newProvidersConfig[validLLMProvider as ProviderId]?.models ?? [],
-                  )
-                : '';
               const imageModels =
                 IMAGE_PROVIDERS[validImageProvider as ImageProviderId]?.models ?? [];
               const validImageModel = validImageProvider
@@ -1169,95 +1003,67 @@ export const useSettingsStore = create<SettingsState>()(
               let autoImageEnabled: boolean | undefined;
               let autoVideoEnabled: boolean | undefined;
 
-              if (!state.autoConfigApplied) {
-                // PDF: unpdf → mineru if server has it
-                if (newPDFConfig.mineru?.isServerConfigured && state.pdfProviderId === 'unpdf') {
-                  autoPdfProvider = 'mineru' as PDFProviderId;
-                }
-
-                // TTS: select first server provider if current is not server-configured
-                const serverTtsIds = Object.keys(data.tts) as TTSProviderId[];
-                if (
-                  serverTtsIds.length > 0 &&
-                  !newTTSConfig[state.ttsProviderId]?.isServerConfigured
-                ) {
-                  autoTtsProvider = serverTtsIds[0];
-                  autoTtsVoice =
-                    DEFAULT_TTS_VOICES[autoTtsProvider as BuiltInTTSProviderId] || 'default';
-                }
-
-                // ASR: select first server provider if current is not server-configured
-                const serverAsrIds = Object.keys(data.asr) as ASRProviderId[];
-                if (
-                  serverAsrIds.length > 0 &&
-                  !newASRConfig[state.asrProviderId]?.isServerConfigured
-                ) {
-                  autoAsrProvider = serverAsrIds[0];
-                }
-
-                // Image: first server provider
-                const serverImageIds = Object.keys(data.image) as ImageProviderId[];
-                if (
-                  serverImageIds.length > 0 &&
-                  !newImageConfig[state.imageProviderId]?.isServerConfigured
-                ) {
-                  autoImageProvider = serverImageIds[0];
-                  const models = IMAGE_PROVIDERS[autoImageProvider]?.models;
-                  if (models?.length) autoImageModel = models[0].id;
-                }
-                if (serverImageIds.length > 0 && !state.imageGenerationEnabled) {
-                  autoImageEnabled = true;
-                }
-
-                // Video: first server provider
-                const serverVideoIds = Object.keys(data.video || {}) as VideoProviderId[];
-                if (
-                  serverVideoIds.length > 0 &&
-                  !newVideoConfig[state.videoProviderId]?.isServerConfigured
-                ) {
-                  autoVideoProvider = serverVideoIds[0];
-                  const models = VIDEO_PROVIDERS[autoVideoProvider]?.models;
-                  if (models?.length) autoVideoModel = models[0].id;
-                }
-                if (serverVideoIds.length > 0 && !state.videoGenerationEnabled) {
-                  autoVideoEnabled = true;
-                }
+              // PDF: unpdf → mineru if server has it
+              if (newPDFConfig.mineru?.isServerConfigured && state.pdfProviderId === 'unpdf') {
+                autoPdfProvider = 'mineru' as PDFProviderId;
               }
 
-              // LLM auto-select: only on true first load (no provider selected yet)
-              let autoProviderId: ProviderId | undefined;
-              let autoModelId: string | undefined;
-              if (!state.providerId && !state.modelId) {
-                for (const [pid, cfg] of Object.entries(newProvidersConfig)) {
-                  if (cfg.isServerConfigured) {
-                    // Prefer server-restricted models, fall back to built-in list
-                    const serverModels = cfg.serverModels;
-                    const modelId = serverModels?.length
-                      ? serverModels[0]
-                      : PROVIDERS[pid as ProviderId]?.models[0]?.id;
-                    if (modelId) {
-                      autoProviderId = pid as ProviderId;
-                      autoModelId = modelId;
-                      break;
-                    }
-                  }
-                }
+              // TTS: select first server provider if current is not server-configured
+              const serverTtsIds = Object.keys(data.tts) as TTSProviderId[];
+              if (
+                serverTtsIds.length > 0 &&
+                !newTTSConfig[state.ttsProviderId]?.isServerConfigured
+              ) {
+                autoTtsProvider = serverTtsIds[0];
+                autoTtsVoice =
+                  DEFAULT_TTS_VOICES[autoTtsProvider as BuiltInTTSProviderId] || 'default';
+              }
+
+              // ASR: select first server provider if current is not server-configured
+              const serverAsrIds = Object.keys(data.asr) as ASRProviderId[];
+              if (
+                serverAsrIds.length > 0 &&
+                !newASRConfig[state.asrProviderId]?.isServerConfigured
+              ) {
+                autoAsrProvider = serverAsrIds[0];
+              }
+
+              // Image: first server provider
+              const serverImageIds = Object.keys(data.image) as ImageProviderId[];
+              if (
+                serverImageIds.length > 0 &&
+                !newImageConfig[state.imageProviderId]?.isServerConfigured
+              ) {
+                autoImageProvider = serverImageIds[0];
+                const models = IMAGE_PROVIDERS[autoImageProvider]?.models;
+                if (models?.length) autoImageModel = models[0].id;
+              }
+              if (serverImageIds.length > 0 && !state.imageGenerationEnabled) {
+                autoImageEnabled = true;
+              }
+
+              // Video: first server provider
+              const serverVideoIds = Object.keys(data.video || {}) as VideoProviderId[];
+              if (
+                serverVideoIds.length > 0 &&
+                !newVideoConfig[state.videoProviderId]?.isServerConfigured
+              ) {
+                autoVideoProvider = serverVideoIds[0];
+                const models = VIDEO_PROVIDERS[autoVideoProvider]?.models;
+                if (models?.length) autoVideoModel = models[0].id;
+              }
+              if (serverVideoIds.length > 0 && !state.videoGenerationEnabled) {
+                autoVideoEnabled = true;
               }
 
               return {
-                providersConfig: newProvidersConfig,
                 ttsProvidersConfig: newTTSConfig,
                 asrProvidersConfig: newASRConfig,
                 pdfProvidersConfig: newPDFConfig,
                 imageProvidersConfig: newImageConfig,
                 videoProvidersConfig: newVideoConfig,
                 webSearchProvidersConfig: newWebSearchConfig,
-                autoConfigApplied: true,
                 // Validated selections
-                ...(validLLMProvider !== state.providerId && {
-                  providerId: validLLMProvider as ProviderId,
-                }),
-                ...(validLLMModel !== state.modelId && { modelId: validLLMModel }),
                 ...(validTTSProvider !== state.ttsProviderId && {
                   ttsProviderId: validTTSProvider as TTSProviderId,
                   ttsVoice: validTTSVoice,
@@ -1282,9 +1088,7 @@ export const useSettingsStore = create<SettingsState>()(
                 }),
                 ...(shouldDisableImage && { imageGenerationEnabled: false }),
                 ...(shouldDisableVideo && { videoGenerationEnabled: false }),
-                // First-run auto-select overrides validation (autoConfigApplied guard).
-                // On first sync, auto-select picks the best provider. On subsequent syncs,
-                // auto* variables stay undefined so only validation spreads take effect.
+                // Auto-select overrides validation: picks best server provider each sync.
                 ...(autoPdfProvider && { pdfProviderId: autoPdfProvider }),
                 ...(autoTtsProvider && {
                   ttsProviderId: autoTtsProvider,
@@ -1305,8 +1109,6 @@ export const useSettingsStore = create<SettingsState>()(
                 ...(autoVideoEnabled !== undefined && {
                   videoGenerationEnabled: autoVideoEnabled,
                 }),
-                ...(autoProviderId && { providerId: autoProviderId }),
-                ...(autoModelId && { modelId: autoModelId }),
               };
             });
           } catch (e) {
@@ -1322,16 +1124,6 @@ export const useSettingsStore = create<SettingsState>()(
       // Migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<SettingsState>;
-
-        // v0 → v1: clear hardcoded default model so user must actively select
-        if (version === 0) {
-          if (state.providerId === 'openai' && state.modelId === 'gpt-4o-mini') {
-            state.modelId = '';
-          }
-        }
-
-        // Ensure providersConfig has all built-in providers (also in merge below)
-        ensureBuiltInProviders(state);
 
         // Ensure image/video configs have all built-in providers
         ensureBuiltInImageProviders(state);
@@ -1424,11 +1216,6 @@ export const useSettingsStore = create<SettingsState>()(
           (state as Record<string, unknown>).asrEnabled = true;
         }
 
-        // Existing users already have their config set up — mark auto-config as done
-        if ((state as Record<string, unknown>).autoConfigApplied === undefined) {
-          (state as Record<string, unknown>).autoConfigApplied = true;
-        }
-
         if ((state as Record<string, unknown>).agentMode === undefined) {
           (state as Record<string, unknown>).agentMode = 'preset';
         }
@@ -1463,7 +1250,6 @@ export const useSettingsStore = create<SettingsState>()(
       // so newly added providers/models appear without clearing cache.
       merge: (persistedState, currentState) => {
         const merged = { ...currentState, ...(persistedState as object) };
-        ensureBuiltInProviders(merged as Partial<SettingsState>);
         ensureBuiltInImageProviders(merged as Partial<SettingsState>);
         ensureBuiltInVideoProviders(merged as Partial<SettingsState>);
         ensureValidProviderSelections(merged as Partial<SettingsState>);

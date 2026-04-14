@@ -10,8 +10,7 @@
 
 import { NextRequest } from 'next/server';
 import { callLLM } from '@/lib/ai/llm';
-import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
-import { isProviderKeyRequired } from '@/lib/ai/providers';
+import { resolveModel } from '@/lib/server/resolve-model';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { nanoid } from 'nanoid';
@@ -121,11 +120,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve model
-    const { model, apiKey, providerId } = await resolveModelFromHeaders(req);
-
-    if (isProviderKeyRequired(providerId) && !apiKey) {
-      return apiError('MISSING_API_KEY', 401, 'API Key is required');
-    }
+    const { model } = await resolveModel({});
 
     // Extract PDF text
     const arrayBuffer = await file.arrayBuffer();

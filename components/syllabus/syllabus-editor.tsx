@@ -37,7 +37,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useSyllabusStore } from '@/lib/store/syllabus';
 import type { CourseSyllabus, CourseModule } from '@/lib/types/syllabus';
-import { useSettingsStore } from '@/lib/store/settings';
 import { jsonrepair } from 'jsonrepair';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -394,9 +393,6 @@ function AIChatPanel({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const modelId = useSettingsStore((s) => s.modelId);
-  const modelConfig = useSettingsStore((s) => s.providersConfig[s.providerId]);
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -422,9 +418,6 @@ function AIChatPanel({
           messages: [{ role: 'user', content: userPrompt }],
           storeState: { stage: null, scenes: [], currentSceneId: null, mode: 'playback' },
           config: { agentIds: ['default'], sessionType: 'syllabus-edit' },
-          model: modelId,
-          apiKey: modelConfig?.apiKey,
-          baseUrl: modelConfig?.baseUrl,
         }),
       });
 
