@@ -34,7 +34,7 @@ import type { CourseSyllabus } from '@/lib/types/syllabus';
 import { syllabusToOutlines } from '@/lib/generation/outline-generator';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
-import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { resolveModel } from '@/lib/server/resolve-model';
 const log = createLogger('Outlines Stream');
 
 export const maxDuration = 300;
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // Get API configuration from request headers
-    const { model: languageModel, modelInfo, modelString } = await resolveModelFromHeaders(req);
+    const { model: languageModel, modelInfo, modelString } = await resolveModel({});
     resolvedModelString = modelString;
 
     if (!body.requirements) {

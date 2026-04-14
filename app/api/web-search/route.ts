@@ -15,7 +15,7 @@ import {
   buildSearchQuery,
   SEARCH_QUERY_REWRITE_EXCERPT_LENGTH,
 } from '@/lib/server/search-query-builder';
-import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { resolveModel } from '@/lib/server/resolve-model';
 import type { AICallFn } from '@/lib/generation/pipeline-types';
 
 const log = createLogger('WebSearch');
@@ -27,11 +27,9 @@ export async function POST(req: NextRequest) {
     const {
       query: requestQuery,
       pdfText,
-      apiKey: clientApiKey,
     } = body as {
       query?: string;
       pdfText?: string;
-      apiKey?: string;
     };
     query = requestQuery;
 
@@ -39,7 +37,7 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'query is required');
     }
 
-    const apiKey = resolveWebSearchApiKey(clientApiKey);
+    const apiKey = resolveWebSearchApiKey(undefined);
     if (!apiKey) {
       return apiError(
         'MISSING_API_KEY',
@@ -53,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     let aiCall: AICallFn | undefined;
     try {
-      const { model: languageModel } = await resolveModelFromHeaders(req);
+      const { model: languageModel } = await resolveModel({});
       aiCall = async (systemPrompt, userPrompt) => {
         const result = await callLLM(
           {

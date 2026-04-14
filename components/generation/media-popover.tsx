@@ -40,7 +40,7 @@ import { isCustomASRProvider } from '@/lib/audio/types';
 import type { SettingsSection } from '@/lib/types/settings';
 
 interface MediaPopoverProps {
-  onSettingsOpen: (section: SettingsSection) => void;
+  onSettingsOpen?: (section: SettingsSection) => void;
 }
 
 // ─── Provider icon maps ───
@@ -467,7 +467,7 @@ export function MediaPopover({ onSettingsOpen }: MediaPopoverProps) {
           <button
             onClick={() => {
               setOpen(false);
-              onSettingsOpen(activeTab);
+              onSettingsOpen?.(activeTab);
             }}
             className="w-full flex items-center justify-between px-3.5 py-2.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
           >

@@ -22,7 +22,6 @@ import { resolveVideoApiKey, resolveVideoBaseUrl } from '@/lib/server/provider-c
 import type { VideoProviderId, VideoGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
-import { validateUrlForSSRF } from '@/lib/server/ssrf-guard';
 
 const log = createLogger('VideoGeneration API');
 
@@ -37,20 +36,9 @@ export async function POST(request: NextRequest) {
     }
 
     const providerId = (request.headers.get('x-video-provider') || 'seedance') as VideoProviderId;
-    const clientApiKey = request.headers.get('x-api-key') || undefined;
-    const clientBaseUrl = request.headers.get('x-base-url') || undefined;
     const clientModel = request.headers.get('x-video-model') || undefined;
 
-    if (clientBaseUrl && process.env.NODE_ENV === 'production') {
-      const ssrfError = await validateUrlForSSRF(clientBaseUrl);
-      if (ssrfError) {
-        return apiError('INVALID_URL', 403, ssrfError);
-      }
-    }
-
-    const apiKey = clientBaseUrl
-      ? clientApiKey || ''
-      : resolveVideoApiKey(providerId, clientApiKey);
+    const apiKey = resolveVideoApiKey(providerId, undefined);
     if (!apiKey) {
       return apiError(
         'MISSING_API_KEY',
@@ -59,7 +47,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const baseUrl = clientBaseUrl ? clientBaseUrl : resolveVideoBaseUrl(providerId, clientBaseUrl);
+    const baseUrl = resolveVideoBaseUrl(providerId, undefined);
 
     // Normalize options against provider capabilities
     const options = normalizeVideoOptions(providerId, body);
