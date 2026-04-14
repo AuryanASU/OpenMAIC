@@ -18,10 +18,7 @@
 
 import { NextRequest } from 'next/server';
 import { generateVideo, normalizeVideoOptions } from '@/lib/media/video-providers';
-import {
-  PLATFORM_VIDEO_API_KEY,
-  PLATFORM_FEATURES,
-} from '@/lib/server/platform-config';
+import { PLATFORM_VIDEO_API_KEY, PLATFORM_FEATURES } from '@/lib/server/platform-config';
 import type { VideoProviderId, VideoGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';

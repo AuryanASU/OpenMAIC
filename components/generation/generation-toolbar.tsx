@@ -58,7 +58,6 @@ export function GenerationToolbar({
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
-
       {/* ── PDF (parser + upload) combined Popover ── */}
       <Popover>
         <PopoverTrigger asChild>
@@ -210,7 +209,6 @@ export function GenerationToolbar({
         </TooltipTrigger>
         <TooltipContent>{t('toolbar.languageHint')}</TooltipContent>
       </Tooltip>
-
     </div>
   );
 }

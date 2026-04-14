@@ -163,7 +163,6 @@ function GenerationPreviewContent() {
         const parseFormData = new FormData();
         parseFormData.append('pdf', pdfFile);
 
-
         const parseResponse = await fetch('/api/parse-pdf', {
           method: 'POST',
           body: parseFormData,

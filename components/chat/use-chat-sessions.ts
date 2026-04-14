@@ -945,7 +945,6 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         }
       }
 
-
       // Create a new session when there's no active QA session to append to.
       // A completed session should NOT be reused — start a fresh one instead.
       const activeSession = sessionsRef.current.find((s) => s.id === sessionId);

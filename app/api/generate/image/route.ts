@@ -17,10 +17,7 @@
 
 import { NextRequest } from 'next/server';
 import { generateImage, aspectRatioToDimensions } from '@/lib/media/image-providers';
-import {
-  PLATFORM_IMAGE_API_KEY,
-  PLATFORM_FEATURES,
-} from '@/lib/server/platform-config';
+import { PLATFORM_IMAGE_API_KEY, PLATFORM_FEATURES } from '@/lib/server/platform-config';
 import type { ImageProviderId, ImageGenerationOptions } from '@/lib/media/types';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';

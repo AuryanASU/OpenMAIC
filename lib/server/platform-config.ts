@@ -23,7 +23,8 @@ export async function getPlatformModel(): Promise<ResolvedModel> {
 }
 
 // ── Text-to-Speech (ElevenLabs) ───────────────────────────────────────────────
-export const PLATFORM_TTS_API_KEY = process.env.ELEVENLABS_API_KEY || process.env.TTS_ELEVENLABS_API_KEY || '';
+export const PLATFORM_TTS_API_KEY =
+  process.env.ELEVENLABS_API_KEY || process.env.TTS_ELEVENLABS_API_KEY || '';
 export const PLATFORM_TTS_VOICE = 'Sarah';
 export const PLATFORM_TTS_MODEL = 'eleven_flash_v2_5';
 
