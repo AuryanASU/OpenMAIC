@@ -237,6 +237,8 @@ function HomePage() {
       const decoder = new TextDecoder();
       if (!reader) throw new Error('No response stream');
 
+      let syllabusReceived = false;
+      let streamError: string | null = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -244,15 +246,27 @@ function HomePage() {
         for (const line of text.split('\n')) {
           if (!line.startsWith('data: ')) continue;
           try {
-            const data = JSON.parse(line.slice(6)) as { syllabus?: CourseSyllabus };
+            const data = JSON.parse(line.slice(6)) as {
+              syllabus?: CourseSyllabus;
+              error?: string;
+            };
             if (data.syllabus) {
+              syllabusReceived = true;
               setSyllabus(data.syllabus);
               setSyllabusEditorOpen(true);
+            } else if (data.error) {
+              streamError = data.error;
             }
           } catch {
-            /* skip */
+            /* skip malformed chunks */
           }
         }
+      }
+
+      if (!syllabusReceived) {
+        throw new Error(
+          streamError ?? 'Syllabus generation timed out or failed. Please try again.',
+        );
       }
     } catch (err) {
       log.error('Syllabus generation failed:', err);
