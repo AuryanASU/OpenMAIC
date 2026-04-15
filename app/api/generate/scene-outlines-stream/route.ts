@@ -12,7 +12,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { streamLLM } from '@/lib/ai/llm';
+import { streamLLM, callLLM } from '@/lib/ai/llm';
 import { buildPrompt, PROMPT_IDS } from '@/lib/generation/prompts';
 import {
   formatImageDescription,
@@ -22,6 +22,7 @@ import {
   formatTeacherPersonaForPrompt,
 } from '@/lib/generation/generation-pipeline';
 import type { AgentInfo } from '@/lib/generation/generation-pipeline';
+import type { AICallFn } from '@/lib/generation/pipeline-types';
 import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
 import { nanoid } from 'nanoid';
 import type {
@@ -31,7 +32,7 @@ import type {
   ImageMapping,
 } from '@/lib/types/generation';
 import type { CourseSyllabus } from '@/lib/types/syllabus';
-import { syllabusToOutlines } from '@/lib/generation/outline-generator';
+import { syllabusToOutlines, syllabusToOutlinesWithAI } from '@/lib/generation/outline-generator';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { getPlatformModel } from '@/lib/server/platform-config';
@@ -112,27 +113,65 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'Requirements are required');
     }
 
-    const { requirements, pdfText, pdfImages, imageMapping, researchContext, agents, syllabus } =
-      body as {
-        requirements: UserRequirements;
-        pdfText?: string;
-        pdfImages?: PdfImage[];
-        imageMapping?: ImageMapping;
-        researchContext?: string;
-        agents?: AgentInfo[];
-        syllabus?: CourseSyllabus;
-      };
+    const {
+      requirements,
+      pdfText,
+      pdfImages,
+      imageMapping,
+      researchContext,
+      agents,
+      syllabus,
+      expansionMode,
+    } = body as {
+      requirements: UserRequirements;
+      pdfText?: string;
+      pdfImages?: PdfImage[];
+      imageMapping?: ImageMapping;
+      researchContext?: string;
+      agents?: AgentInfo[];
+      syllabus?: CourseSyllabus;
+      expansionMode?: 'ai' | 'deterministic';
+    };
     requirementSnippet = requirements?.requirement?.substring(0, 60);
 
     // ── Syllabus fast path ────────────────────────────────────────────────
     // When a structured syllabus is provided, derive outlines from it directly
     // without an additional AI planning call, resulting in higher fidelity.
     if (syllabus?.modules?.length) {
+      const mode = expansionMode ?? 'deterministic';
       log.info(
-        `Using syllabus "${syllabus.title}" as outline source (${syllabus.modules.length} modules)`,
+        `Using syllabus "${syllabus.title}" as outline source (${syllabus.modules.length} modules, mode: ${mode})`,
       );
       const encoder = new TextEncoder();
-      const outlines = syllabusToOutlines(syllabus, requirements.language ?? 'en-US');
+
+      let outlines: SceneOutline[];
+
+      if (mode === 'ai') {
+        // AI expansion: use LLM to intelligently expand each module
+        const aiCall: AICallFn = async (systemPrompt, userPrompt, _images) => {
+          const result = await callLLM(
+            {
+              model: languageModel,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt },
+              ],
+              maxOutputTokens: modelInfo?.outputWindow,
+            },
+            'syllabus-expansion',
+          );
+          return result.text;
+        };
+        outlines = await syllabusToOutlinesWithAI(
+          syllabus,
+          requirements.language ?? 'en-US',
+          aiCall,
+        );
+      } else {
+        // Deterministic expansion: rule-based, no AI call needed
+        outlines = syllabusToOutlines(syllabus, requirements.language ?? 'en-US');
+      }
+
       const stream = new ReadableStream({
         start(controller) {
           for (let i = 0; i < outlines.length; i++) {

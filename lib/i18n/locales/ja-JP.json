@@ -165,6 +165,27 @@
     "quizReport": "クイズレポート",
     "retry": "やり直す"
   },
+  "assignment": {
+    "subtitle": "レポート課題",
+    "criteriaCount": "基準",
+    "pointsSuffix": "点",
+    "instructions": "課題説明",
+    "submissionGuidelines": "提出ガイドライン",
+    "due": "期限",
+    "startWriting": "執筆開始",
+    "writing": "執筆中",
+    "words": "語",
+    "chars": "文字",
+    "writingPlaceholder": "ここに回答を入力してください...",
+    "submitForGrading": "採点に提出",
+    "aiGrading": "AIが採点中...",
+    "aiGradingWait": "ルーブリックに基づいて評価しています",
+    "report": "課題レポート",
+    "retry": "やり直す",
+    "excellent": "素晴らしい！",
+    "keepGoing": "頑張りましょう！",
+    "needsReview": "復習が必要"
+  },
   "roundtable": {
     "teacher": "教師",
     "you": "あなた",

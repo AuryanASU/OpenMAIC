@@ -6,6 +6,7 @@
 **Key Points**: {{keyPoints}}
 **Description**: {{description}}
 {{courseContext}}
+{{syllabusContext}}
 {{agents}}
 
 Please generate the speech content for this PBL scene.

@@ -93,7 +93,7 @@ export interface LegacyUserRequirements {
  */
 export interface SceneOutline {
   id: string;
-  type: 'slide' | 'quiz' | 'interactive' | 'pbl';
+  type: 'slide' | 'quiz' | 'interactive' | 'pbl' | 'assignment';
   title: string;
   description: string; // 1-2 sentences describing the purpose
   keyPoints: string[]; // 3-5 core key points
@@ -126,6 +126,16 @@ export interface SceneOutline {
     issueCount?: number;
     language: 'zh-CN' | 'en-US';
   };
+  // Assignment-specific config
+  assignmentConfig?: {
+    assignmentType: 'essay' | 'analysis' | 'case_study' | 'reflection' | 'research';
+    estimatedLength: 'short' | 'medium' | 'long';
+    rubricFocus: string[];
+  };
+  // Module context (when generated from a syllabus)
+  moduleId?: string; // ID of the parent CourseModule
+  moduleTitle?: string; // e.g., "Module 3: Data Structures"
+  moduleIndex?: number; // 0-based index into syllabus.modules[]
 }
 
 // ==================== Stage 3 Output: Generated Content ====================
@@ -158,6 +168,33 @@ import type { PBLProjectConfig } from '@/lib/pbl/types';
  */
 export interface GeneratedPBLContent {
   projectConfig: PBLProjectConfig;
+}
+
+// ==================== Assignment Generation Types ====================
+
+/**
+ * AI-generated assignment content (before IDs are added)
+ */
+export interface GeneratedAssignmentContent {
+  title: string;
+  instructions: string;
+  rubric: {
+    title: string;
+    totalPoints: number;
+    criteria: Array<{
+      name: string;
+      description: string;
+      weight: number;
+      levels: Array<{
+        label: string;
+        points: number;
+        description: string;
+      }>;
+    }>;
+  };
+  submissionGuidelines?: string;
+  dueDescription?: string;
+  aiGradingPrompt?: string;
 }
 
 // ==================== Interactive Generation Types ====================

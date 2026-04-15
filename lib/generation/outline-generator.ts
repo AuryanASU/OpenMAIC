@@ -1,6 +1,6 @@
 /**
  * Stage 1: Generate scene outlines from user requirements.
- * Also contains outline fallback logic.
+ * Also contains outline fallback logic and module expansion.
  */
 
 import { nanoid } from 'nanoid';
@@ -11,7 +11,7 @@ import type {
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
-import type { CourseSyllabus } from '@/lib/types/syllabus';
+import type { CourseSyllabus, CourseModule } from '@/lib/types/syllabus';
 import { buildPrompt, PROMPT_IDS } from './prompts';
 import { formatImageDescription, formatImagePlaceholder } from './prompt-formatters';
 import { parseJsonResponse } from './json-repair';
@@ -38,10 +38,269 @@ function pickSceneType(
   return 'slide';
 }
 
+// ── Module difficulty helper ─────────────────────────────────────────────
+
+/**
+ * Determine quiz difficulty based on the module's position in the course.
+ * First 25% → easy, middle 50% → medium, final 25% → hard.
+ */
+function getModuleDifficulty(
+  moduleIndex: number,
+  totalModules: number,
+): 'easy' | 'medium' | 'hard' {
+  if (totalModules <= 1) return 'medium';
+  const position = moduleIndex / (totalModules - 1); // 0..1
+  if (position < 0.25) return 'easy';
+  if (position >= 0.75) return 'hard';
+  return 'medium';
+}
+
+// ── Deterministic module expansion ───────────────────────────────────────
+
+/**
+ * Expand a single module into 2-4 SceneOutline objects deterministically.
+ *
+ * Rules:
+ * - Always: 1 lecture slide
+ * - If 2+ topics: 1 practice quiz
+ * - If 3+ topics or sceneTypes includes interactive/pbl/assignment: 1 activity scene
+ * - If 4+ topics: 1 module summary slide
+ */
+function expandModuleDeterministic(
+  module: CourseModule,
+  moduleIndex: number,
+  totalModules: number,
+  language: 'zh-CN' | 'en-US',
+): SceneOutline[] {
+  const outlines: SceneOutline[] = [];
+  const difficulty = getModuleDifficulty(moduleIndex, totalModules);
+
+  // 1. Lecture slide (always)
+  outlines.push({
+    id: nanoid(),
+    type: 'slide',
+    title: module.title,
+    description: module.description || `Cover key topics in ${module.title}`,
+    keyPoints: [...module.topics.slice(0, 5), ...module.learningObjectives.slice(0, 3)].slice(0, 6),
+    teachingObjective: module.learningObjectives[0],
+    order: 0, // Placeholder — caller assigns final order
+    language,
+    moduleId: module.id,
+    moduleTitle: module.title,
+    moduleIndex,
+  });
+
+  // 2. Practice quiz (if 2+ topics)
+  if (module.topics.length >= 2) {
+    outlines.push({
+      id: nanoid(),
+      type: 'quiz',
+      title:
+        language === 'zh-CN' ? `${module.title} - 知识检测` : `${module.title} - Knowledge Check`,
+      description:
+        language === 'zh-CN'
+          ? `检验对${module.title}核心概念的理解`
+          : `Test understanding of core concepts in ${module.title}`,
+      keyPoints: module.topics.slice(0, 4),
+      order: 0,
+      language,
+      moduleId: module.id,
+      moduleTitle: module.title,
+      moduleIndex,
+      quizConfig: {
+        questionCount: Math.min(5, Math.max(3, module.topics.length)),
+        difficulty,
+        questionTypes: ['single', 'multiple'],
+      },
+    });
+  }
+
+  // 3. Activity scene (if 3+ topics or sceneTypes includes interactive/pbl/assignment)
+  const hasActivityType = module.sceneTypes?.some((t) =>
+    ['interactive', 'pbl', 'assignment'].includes(t),
+  );
+  if (module.topics.length >= 3 || hasActivityType) {
+    const activityType = pickSceneType(
+      module.sceneTypes?.filter((t) => ['interactive', 'pbl', 'assignment'].includes(t)),
+    );
+
+    const activity: SceneOutline = {
+      id: nanoid(),
+      type: activityType,
+      title:
+        language === 'zh-CN' ? `${module.title} - 实践活动` : `${module.title} - Practice Activity`,
+      description:
+        language === 'zh-CN'
+          ? `通过实践活动加深对${module.title}的理解`
+          : `Deepen understanding of ${module.title} through hands-on practice`,
+      keyPoints: module.topics.slice(0, 4),
+      order: 0,
+      language,
+      moduleId: module.id,
+      moduleTitle: module.title,
+      moduleIndex,
+    };
+
+    // Attach type-specific configs
+    if (activityType === 'interactive') {
+      activity.interactiveConfig = {
+        conceptName: module.topics[0] ?? module.title,
+        conceptOverview: module.description,
+        designIdea: `Interactive visualization of ${module.topics.slice(0, 2).join(' and ')}`,
+        subject: module.title,
+      };
+    } else if (activityType === 'pbl') {
+      activity.pblConfig = {
+        projectTopic: module.title,
+        projectDescription: module.description,
+        targetSkills: module.learningObjectives.slice(0, 4),
+        issueCount: 3,
+        language,
+      };
+    } else if (activityType === 'assignment') {
+      activity.assignmentConfig = {
+        assignmentType: 'reflection',
+        estimatedLength: 'medium',
+        rubricFocus: module.learningObjectives.slice(0, 3),
+      };
+    }
+
+    outlines.push(activity);
+  }
+
+  // 4. Module summary slide (if 4+ topics)
+  if (module.topics.length >= 4) {
+    outlines.push({
+      id: nanoid(),
+      type: 'slide',
+      title: language === 'zh-CN' ? `${module.title} - 总结` : `${module.title} - Summary`,
+      description:
+        language === 'zh-CN'
+          ? `回顾${module.title}的关键要点`
+          : `Recap the key takeaways from ${module.title}`,
+      keyPoints: module.learningObjectives.slice(0, 4),
+      order: 0,
+      language,
+      moduleId: module.id,
+      moduleTitle: module.title,
+      moduleIndex,
+    });
+  }
+
+  return outlines;
+}
+
+// ── AI-powered module expansion ──────────────────────────────────────────
+
+/**
+ * Expand a single module into 3-5 SceneOutline objects via an AI call.
+ * Falls back to `expandModuleDeterministic()` on failure.
+ */
+async function expandModuleWithAI(
+  module: CourseModule,
+  moduleIndex: number,
+  syllabus: CourseSyllabus,
+  language: 'zh-CN' | 'en-US',
+  aiCall: AICallFn,
+): Promise<SceneOutline[]> {
+  const totalModules = syllabus.modules.length;
+  const difficulty = getModuleDifficulty(moduleIndex, totalModules);
+
+  // Format topics list
+  const moduleTopics =
+    module.topics.length > 0
+      ? module.topics.map((t, i) => `${i + 1}. ${t}`).join('\n')
+      : 'No specific topics listed';
+
+  // Format objectives list
+  const moduleObjectives =
+    module.learningObjectives.length > 0
+      ? module.learningObjectives.map((o, i) => `${i + 1}. ${o}`).join('\n')
+      : 'No specific objectives listed';
+
+  // Format scene types
+  const moduleSceneTypes = module.sceneTypes?.length ? module.sceneTypes.join(', ') : 'slide, quiz';
+
+  // Build course module outline (with current module marked)
+  const courseModuleOutline = syllabus.modules
+    .map((m, i) => {
+      const marker = i === moduleIndex ? ' <<<< CURRENT MODULE' : '';
+      const topics = m.topics.slice(0, 5).join(', ');
+      return `Module ${i + 1}: ${m.title}${marker}\n  Topics: ${topics}`;
+    })
+    .join('\n');
+
+  // Format assessment strategy
+  const assessmentStrategy = syllabus.assessmentStrategy?.components?.length
+    ? syllabus.assessmentStrategy.components
+        .map((c) => `- ${c.name} (${c.weight}%): ${c.description}`)
+        .join('\n')
+    : 'No assessment strategy provided';
+
+  const modulePosition = `Module ${moduleIndex + 1} of ${totalModules}`;
+
+  try {
+    const prompts = buildPrompt(PROMPT_IDS.MODULE_TO_OUTLINES, {
+      moduleTitle: module.title,
+      moduleDescription: module.description || `Cover key topics in ${module.title}`,
+      moduleTopics,
+      moduleObjectives,
+      moduleSceneTypes,
+      courseTitle: syllabus.title,
+      courseModuleOutline,
+      assessmentStrategy,
+      modulePosition,
+      difficulty,
+      language,
+    });
+
+    if (!prompts) {
+      log.warn(
+        '[outline-generator] Module-to-outlines prompt template not found, using deterministic fallback',
+      );
+      return expandModuleDeterministic(module, moduleIndex, totalModules, language);
+    }
+
+    const response = await aiCall(prompts.system, prompts.user);
+    const parsed = parseJsonResponse<SceneOutline[]>(response);
+
+    if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
+      log.warn(
+        `[outline-generator] Failed to parse AI response for module "${module.title}", using deterministic fallback`,
+      );
+      return expandModuleDeterministic(module, moduleIndex, totalModules, language);
+    }
+
+    // Inject module context and generate unique IDs
+    const enriched = parsed.map((outline) => ({
+      ...outline,
+      id: nanoid(),
+      language,
+      moduleId: module.id,
+      moduleTitle: module.title,
+      moduleIndex,
+      order: 0, // Placeholder — caller assigns final order
+    }));
+
+    log.info(
+      `[outline-generator] AI expanded module "${module.title}" into ${enriched.length} scenes`,
+    );
+    return enriched;
+  } catch (err) {
+    log.warn(
+      `[outline-generator] AI expansion failed for module "${module.title}", using deterministic fallback:`,
+      err,
+    );
+    return expandModuleDeterministic(module, moduleIndex, totalModules, language);
+  }
+}
+
+// ── Syllabus-to-outlines (deterministic) ─────────────────────────────────
+
 /**
  * Convert a CourseSyllabus directly into SceneOutline[] without an extra AI call.
  *
- * Each module becomes one or more scenes depending on module complexity.
+ * Each module is expanded into multiple scenes using `expandModuleDeterministic()`.
  * The caller may still pass these through the normal scene-generation stage.
  */
 export function syllabusToOutlines(
@@ -49,6 +308,7 @@ export function syllabusToOutlines(
   language: 'zh-CN' | 'en-US',
 ): SceneOutline[] {
   const outlines: SceneOutline[] = [];
+  const totalModules = syllabus.modules.length;
 
   // Opening slide — course introduction
   outlines.push({
@@ -59,47 +319,21 @@ export function syllabusToOutlines(
     keyPoints: syllabus.learningOutcomes.slice(0, 5),
     order: 1,
     language,
+    moduleId: '__course_intro__',
+    moduleTitle: syllabus.title,
+    moduleIndex: -1,
   });
 
-  // One outline per module
-  for (const mod of syllabus.modules) {
-    const type = pickSceneType(mod.sceneTypes);
-    const outline: SceneOutline = {
-      id: nanoid(),
-      type,
-      title: mod.title,
-      description: mod.description || `Cover key topics in ${mod.title}`,
-      keyPoints: [...mod.topics.slice(0, 5), ...mod.learningObjectives.slice(0, 3)].slice(0, 6),
-      teachingObjective: mod.learningObjectives[0],
-      order: outlines.length + 1,
-      language,
-    };
+  // Expand each module into multiple scenes
+  for (let i = 0; i < syllabus.modules.length; i++) {
+    const mod = syllabus.modules[i];
+    const moduleOutlines = expandModuleDeterministic(mod, i, totalModules, language);
 
-    // Attach type-specific configs
-    if (type === 'quiz') {
-      outline.quizConfig = {
-        questionCount: Math.min(5, Math.max(3, mod.topics.length)),
-        difficulty: 'medium',
-        questionTypes: ['single', 'multiple'],
-      };
-    } else if (type === 'interactive') {
-      outline.interactiveConfig = {
-        conceptName: mod.topics[0] ?? mod.title,
-        conceptOverview: mod.description,
-        designIdea: `Interactive visualization of ${mod.topics.slice(0, 2).join(' and ')}`,
-        subject: syllabus.title,
-      };
-    } else if (type === 'pbl') {
-      outline.pblConfig = {
-        projectTopic: mod.title,
-        projectDescription: mod.description,
-        targetSkills: mod.learningObjectives.slice(0, 4),
-        issueCount: 3,
-        language,
-      };
+    // Assign sequential order numbers
+    for (const outline of moduleOutlines) {
+      outline.order = outlines.length + 1;
+      outlines.push(outline);
     }
-
-    outlines.push(outline);
   }
 
   // Closing slide — summary & next steps
@@ -112,10 +346,81 @@ export function syllabusToOutlines(
     keyPoints: syllabus.learningOutcomes.slice(0, 4),
     order: outlines.length + 1,
     language,
+    moduleId: '__course_summary__',
+    moduleTitle: 'Course Summary & Next Steps',
+    moduleIndex: syllabus.modules.length,
   });
 
   return outlines;
 }
+
+// ── Syllabus-to-outlines (AI-powered) ────────────────────────────────────
+
+/**
+ * Convert a CourseSyllabus into SceneOutline[] using AI to expand each module.
+ *
+ * Each module is expanded sequentially so the AI can consider the full course
+ * context. Falls back to deterministic expansion per-module on failure.
+ */
+export async function syllabusToOutlinesWithAI(
+  syllabus: CourseSyllabus,
+  language: 'zh-CN' | 'en-US',
+  aiCall: AICallFn,
+): Promise<SceneOutline[]> {
+  const outlines: SceneOutline[] = [];
+
+  // Opening slide — course introduction
+  outlines.push({
+    id: nanoid(),
+    type: 'slide',
+    title: syllabus.title,
+    description: `Course introduction: ${syllabus.description.substring(0, 300)}`,
+    keyPoints: syllabus.learningOutcomes.slice(0, 5),
+    order: 1,
+    language,
+    moduleId: '__course_intro__',
+    moduleTitle: syllabus.title,
+    moduleIndex: -1,
+  });
+
+  // Expand each module sequentially with AI
+  for (let i = 0; i < syllabus.modules.length; i++) {
+    const mod = syllabus.modules[i];
+    log.info(
+      `[outline-generator] Expanding module ${i + 1}/${syllabus.modules.length}: "${mod.title}"`,
+    );
+
+    const moduleOutlines = await expandModuleWithAI(mod, i, syllabus, language, aiCall);
+
+    // Assign sequential order numbers
+    for (const outline of moduleOutlines) {
+      outline.order = outlines.length + 1;
+      outlines.push(outline);
+    }
+  }
+
+  // Closing slide — summary & next steps
+  outlines.push({
+    id: nanoid(),
+    type: 'slide',
+    title: 'Course Summary & Next Steps',
+    description:
+      'Recap key takeaways, review learning outcomes achieved, and outline further learning paths.',
+    keyPoints: syllabus.learningOutcomes.slice(0, 4),
+    order: outlines.length + 1,
+    language,
+    moduleId: '__course_summary__',
+    moduleTitle: 'Course Summary & Next Steps',
+    moduleIndex: syllabus.modules.length,
+  });
+
+  // Uniquify media element IDs across the entire outline list
+  const result = uniquifyMediaElementIds(outlines);
+
+  return result;
+}
+
+// ── Main entry point ─────────────────────────────────────────────────────
 
 /**
  * Generate scene outlines from user requirements.
@@ -137,34 +442,47 @@ export async function generateSceneOutlinesFromRequirements(
     teacherContext?: string;
     /** When provided, outlines are derived from the syllabus structure */
     syllabus?: CourseSyllabus;
+    /** How to expand syllabus modules: 'ai' uses LLM per module, 'deterministic' uses rules */
+    expansionMode?: 'ai' | 'deterministic';
   },
 ): Promise<GenerationResult<SceneOutline[]>> {
   // ── Fast path: derive outlines directly from syllabus ──────────────────
   if (options?.syllabus) {
-    log.info(`[outline-generator] Using syllabus "${options.syllabus.title}" as outline source`);
+    log.info(
+      `[outline-generator] Using syllabus "${options.syllabus.title}" as outline source (mode: ${options?.expansionMode ?? 'deterministic'})`,
+    );
     try {
       callbacks?.onProgress?.({
         currentStage: 1,
         overallProgress: 20,
-        stageProgress: 50,
-        statusMessage: 'Mapping syllabus modules to scene outlines…',
+        stageProgress: 10,
+        statusMessage:
+          options?.expansionMode === 'ai'
+            ? 'Expanding syllabus modules with AI...'
+            : 'Mapping syllabus modules to scene outlines...',
         scenesGenerated: 0,
         totalScenes: 0,
       });
 
-      const outlines = syllabusToOutlines(options.syllabus, requirements.language);
-      const enriched = uniquifyMediaElementIds(outlines);
+      let outlines: SceneOutline[];
+
+      if (options?.expansionMode === 'ai') {
+        outlines = await syllabusToOutlinesWithAI(options.syllabus, requirements.language, aiCall);
+      } else {
+        const rawOutlines = syllabusToOutlines(options.syllabus, requirements.language);
+        outlines = uniquifyMediaElementIds(rawOutlines);
+      }
 
       callbacks?.onProgress?.({
         currentStage: 1,
         overallProgress: 50,
         stageProgress: 100,
-        statusMessage: `Generated ${enriched.length} outlines from syllabus`,
+        statusMessage: `Generated ${outlines.length} outlines from syllabus`,
         scenesGenerated: 0,
-        totalScenes: enriched.length,
+        totalScenes: outlines.length,
       });
 
-      return { success: true, data: enriched };
+      return { success: true, data: outlines };
     } catch (err) {
       log.warn(
         '[outline-generator] Syllabus-to-outlines failed, falling back to AI generation:',
@@ -322,6 +640,12 @@ export function applyOutlineFallbacks(
   if (outline.type === 'pbl' && (!outline.pblConfig || !hasLanguageModel)) {
     log.warn(
       `PBL outline "${outline.title}" missing pblConfig or languageModel, falling back to slide`,
+    );
+    return { ...outline, type: 'slide' };
+  }
+  if (outline.type === 'assignment' && !outline.assignmentConfig) {
+    log.warn(
+      `Assignment outline "${outline.title}" missing assignmentConfig, falling back to slide`,
     );
     return { ...outline, type: 'slide' };
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   PanelLeftClose,
@@ -11,13 +11,17 @@ import {
   Globe,
   AlertCircle,
   RefreshCw,
+  FileText,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThumbnailSlide } from '@/components/slide-renderer/components/ThumbnailSlide';
 import { useStageStore, useCanvasStore } from '@/lib/store';
 import { useI18n } from '@/lib/hooks/use-i18n';
-import type { SceneType, SlideContent } from '@/lib/types/stage';
+import type { Scene, SceneType, SlideContent } from '@/lib/types/stage';
 import { PENDING_SCENE_ID } from '@/lib/store/stage';
+import { groupScenesByModule, isSpecialModule } from '@/lib/utils/scene-grouping';
 
 interface SceneSidebarProps {
   readonly collapsed: boolean;
@@ -45,6 +49,28 @@ export function SceneSidebar({
   const viewportRatio = useCanvasStore.use.viewportRatio();
 
   const [retryingOutlineId, setRetryingOutlineId] = useState<string | null>(null);
+  const [collapsedModules, setCollapsedModules] = useState<Set<string>>(new Set());
+
+  const moduleGroups = useMemo(() => groupScenesByModule(scenes), [scenes]);
+
+  // Determine whether we should render grouped view:
+  // only if there are actual modules (not a single undefined-moduleId group)
+  const hasModuleGroups = useMemo(
+    () => !(moduleGroups.length === 1 && moduleGroups[0].moduleId == null),
+    [moduleGroups],
+  );
+
+  const toggleModule = useCallback((moduleId: string) => {
+    setCollapsedModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(moduleId)) {
+        next.delete(moduleId);
+      } else {
+        next.add(moduleId);
+      }
+      return next;
+    });
+  }, []);
 
   const handleRetryOutline = async (outlineId: string) => {
     if (!onRetryOutline) return;
@@ -94,6 +120,7 @@ export function SceneSidebar({
       quiz: PieChart,
       interactive: MousePointer2,
       pbl: Cpu,
+      assignment: FileText,
     };
     return icons[type] || BookOpen;
   };
@@ -141,187 +168,86 @@ export function SceneSidebar({
           data-testid="scene-list"
           className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 scrollbar-hide pt-1"
         >
-          {scenes.map((scene, index) => {
-            const isActive = currentSceneId === scene.id;
-            const Icon = getSceneTypeIcon(scene.type);
-            const isSlide = scene.type === 'slide';
-            const slideContent = isSlide ? (scene.content as SlideContent) : null;
+          {hasModuleGroups
+            ? moduleGroups.map((group) => {
+                const isSpecial = isSpecialModule(group.moduleId);
+                const isCollapsed =
+                  !isSpecial && group.moduleId != null && collapsedModules.has(group.moduleId);
+                const showHeader = !isSpecial && group.moduleId != null;
+                const moduleNum = group.moduleIndex != null ? group.moduleIndex + 1 : undefined;
 
-            return (
-              <div
-                key={scene.id}
-                data-testid="scene-item"
-                onClick={() => {
-                  if (onSceneSelect) {
-                    onSceneSelect(scene.id);
-                  } else {
-                    setCurrentSceneId(scene.id);
-                  }
-                }}
-                className={cn(
-                  'group relative rounded-lg transition-all duration-200 cursor-pointer flex flex-col gap-1 p-1.5',
-                  isActive
-                    ? 'bg-[#8C1D40]/10 dark:bg-[#C75B7A]/20 ring-1 ring-[#8C1D40]/30 dark:ring-[#C75B7A]/40'
-                    : 'hover:bg-gray-50/80 dark:hover:bg-gray-800/50',
-                )}
-              >
-                {/* Scene Header */}
-                <div className="flex justify-between items-center px-2 pt-0.5">
-                  <div className="flex items-center gap-2 max-w-full">
-                    <span
-                      className={cn(
-                        'text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shrink-0',
-                        isActive
-                          ? 'bg-[#8C1D40] dark:bg-[#C75B7A] text-white shadow-sm shadow-[#8C1D40]/30'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
-                      )}
-                    >
-                      {index + 1}
-                    </span>
-                    <span
-                      data-testid="scene-title"
-                      className={cn(
-                        'text-xs font-bold truncate transition-colors',
-                        isActive
-                          ? 'text-[#8C1D40] dark:text-[#C75B7A]'
-                          : 'text-gray-600 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100',
-                      )}
-                    >
-                      {scene.title}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Thumbnail */}
-                <div className="relative aspect-video w-full rounded overflow-hidden bg-gray-100 dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/5">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    {isSlide && slideContent ? (
-                      <ThumbnailSlide
-                        slide={slideContent.canvas}
-                        viewportSize={viewportSize}
-                        viewportRatio={viewportRatio}
-                        size={Math.max(100, sidebarWidth - 28)}
-                      />
-                    ) : scene.type === 'quiz' ? (
-                      /* Quiz: question bar + 2x2 option grid */
-                      <div className="w-full h-full bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/20 p-2 flex flex-col">
-                        <div className="h-1.5 w-4/5 bg-orange-200/70 dark:bg-orange-700/30 rounded-full mb-1.5" />
-                        <div className="flex-1 grid grid-cols-2 gap-1">
-                          {[0, 1, 2, 3].map((i) => (
-                            <div
-                              key={i}
-                              className={cn(
-                                'rounded flex items-center gap-1 px-1',
-                                i === 1
-                                  ? 'bg-orange-400/20 dark:bg-orange-500/20 border border-orange-300/50 dark:border-orange-600/30'
-                                  : 'bg-white/60 dark:bg-white/5 border border-orange-100/60 dark:border-orange-800/20',
-                              )}
-                            >
-                              <div
-                                className={cn(
-                                  'w-1.5 h-1.5 rounded-full shrink-0',
-                                  i === 1
-                                    ? 'bg-orange-400 dark:bg-orange-500'
-                                    : 'bg-orange-200 dark:bg-orange-700/50',
-                                )}
-                              />
-                              <div
-                                className={cn(
-                                  'h-1 rounded-full flex-1',
-                                  i === 1
-                                    ? 'bg-orange-300/60 dark:bg-orange-600/40'
-                                    : 'bg-orange-100/80 dark:bg-orange-800/30',
-                                )}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : scene.type === 'interactive' ? (
-                      /* Interactive: browser window with chrome + content */
-                      <div className="w-full h-full bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 p-1.5 flex flex-col">
-                        <div className="flex items-center gap-1 mb-1 pb-1 border-b border-emerald-200/40 dark:border-emerald-700/20">
-                          <div className="flex gap-0.5">
-                            <div className="w-1 h-1 rounded-full bg-red-300 dark:bg-red-500/60" />
-                            <div className="w-1 h-1 rounded-full bg-amber-300 dark:bg-amber-500/60" />
-                            <div className="w-1 h-1 rounded-full bg-green-300 dark:bg-green-500/60" />
-                          </div>
-                          <div className="h-1.5 flex-1 bg-emerald-200/40 dark:bg-emerald-700/30 rounded-full ml-0.5" />
-                        </div>
-                        <div className="flex-1 flex gap-1">
-                          <div className="w-1/4 space-y-1 pt-0.5">
-                            {[1, 2, 3].map((i) => (
-                              <div
-                                key={i}
-                                className="h-0.5 w-full bg-emerald-200/60 dark:bg-emerald-700/30 rounded-full"
-                              />
-                            ))}
-                          </div>
-                          <div className="flex-1 bg-emerald-100/40 dark:bg-emerald-800/20 rounded flex items-center justify-center border border-emerald-200/40 dark:border-emerald-700/20">
-                            <Globe className="w-4 h-4 text-emerald-300/80 dark:text-emerald-600/50" />
-                          </div>
-                        </div>
-                      </div>
-                    ) : scene.type === 'pbl' ? (
-                      /* PBL: kanban board with 3 columns */
-                      <div className="w-full h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20 p-1.5 flex flex-col">
-                        <div className="flex items-center gap-1 mb-1.5">
-                          <div className="w-1.5 h-1.5 rounded bg-blue-300 dark:bg-blue-600" />
-                          <div className="h-1 w-8 bg-blue-200/60 dark:bg-blue-700/30 rounded-full" />
-                        </div>
-                        <div className="flex-1 flex gap-1 overflow-hidden">
-                          {[0, 1, 2].map((col) => (
-                            <div
-                              key={col}
-                              className="flex-1 bg-white/50 dark:bg-white/5 rounded p-0.5 flex flex-col gap-0.5"
-                            >
-                              <div
-                                className={cn(
-                                  'h-0.5 w-3 rounded-full mb-0.5',
-                                  col === 0
-                                    ? 'bg-blue-300/70'
-                                    : col === 1
-                                      ? 'bg-amber-300/70'
-                                      : 'bg-green-300/70',
-                                )}
-                              />
-                              {Array.from({
-                                length: col === 0 ? 3 : col === 1 ? 2 : 1,
-                              }).map((_, i) => (
-                                <div
-                                  key={i}
-                                  className="h-2 w-full bg-blue-100/60 dark:bg-blue-800/20 rounded border border-blue-200/30 dark:border-blue-700/20"
-                                />
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      /* Fallback */
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-500">
-                        <Icon className="w-4 h-4" />
-                        <span className="text-[9px] font-bold uppercase tracking-wider opacity-80">
-                          {scene.type}
-                        </span>
-                      </div>
-                    )}
-
-                    {isSlide && (
-                      <div
-                        className={cn(
-                          'absolute inset-0 bg-[#8C1D40]/0 transition-colors',
-                          isActive
-                            ? 'bg-[#8C1D40]/0'
-                            : 'group-hover:bg-black/5 dark:group-hover:bg-white/5',
+                return (
+                  <div key={group.moduleId ?? '__ungrouped__'} className="space-y-1">
+                    {/* Module header */}
+                    {showHeader && (
+                      <button
+                        onClick={() => group.moduleId && toggleModule(group.moduleId)}
+                        className="sticky top-0 z-10 w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200/80 dark:hover:bg-stone-700/80 transition-colors cursor-pointer select-none"
+                      >
+                        {/* Module number badge */}
+                        {moduleNum != null && (
+                          <span className="text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#8C1D40] dark:bg-[#C75B7A] text-white">
+                            {moduleNum}
+                          </span>
                         )}
-                      />
+                        {/* Module title */}
+                        <span className="flex-1 text-xs font-bold text-gray-700 dark:text-gray-200 truncate text-left">
+                          {group.moduleTitle ?? 'Ungrouped'}
+                        </span>
+                        {/* Scene count + chevron */}
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0 mr-0.5">
+                          {group.scenes.length}
+                        </span>
+                        {isCollapsed ? (
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
+                        )}
+                      </button>
                     )}
+
+                    {/* Scene cards */}
+                    {!isCollapsed &&
+                      group.scenes.map((scene) => (
+                        <SceneCard
+                          key={scene.id}
+                          scene={scene}
+                          isActive={currentSceneId === scene.id}
+                          sidebarWidth={sidebarWidth}
+                          viewportSize={viewportSize}
+                          viewportRatio={viewportRatio}
+                          getSceneTypeIcon={getSceneTypeIcon}
+                          onSelect={() => {
+                            if (onSceneSelect) {
+                              onSceneSelect(scene.id);
+                            } else {
+                              setCurrentSceneId(scene.id);
+                            }
+                          }}
+                        />
+                      ))}
                   </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })
+            : scenes.map((scene, index) => (
+                <SceneCard
+                  key={scene.id}
+                  scene={scene}
+                  sceneNumber={index + 1}
+                  isActive={currentSceneId === scene.id}
+                  sidebarWidth={sidebarWidth}
+                  viewportSize={viewportSize}
+                  viewportRatio={viewportRatio}
+                  getSceneTypeIcon={getSceneTypeIcon}
+                  onSelect={() => {
+                    if (onSceneSelect) {
+                      onSceneSelect(scene.id);
+                    } else {
+                      setCurrentSceneId(scene.id);
+                    }
+                  }}
+                />
+              ))}
 
           {/* Single placeholder for the next generating page (clickable) */}
           {generatingOutlines.length > 0 &&
@@ -448,6 +374,204 @@ export function SceneSidebar({
 
         {/* Spacer to push toggle button area */}
         <div className="mt-auto" />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  SceneCard – extracted so both flat and grouped views share it      */
+/* ------------------------------------------------------------------ */
+
+interface SceneCardProps {
+  readonly scene: Scene;
+  /** Explicit scene number shown in the badge. When omitted, uses `scene.order + 1`. */
+  readonly sceneNumber?: number;
+  readonly isActive: boolean;
+  readonly sidebarWidth: number;
+  readonly viewportSize: number;
+  readonly viewportRatio: number;
+  readonly getSceneTypeIcon: (type: SceneType) => React.ComponentType<{ className?: string }>;
+  readonly onSelect: () => void;
+}
+
+function SceneCard({
+  scene,
+  sceneNumber,
+  isActive,
+  sidebarWidth,
+  viewportSize,
+  viewportRatio,
+  getSceneTypeIcon,
+  onSelect,
+}: SceneCardProps) {
+  const Icon = getSceneTypeIcon(scene.type);
+  const isSlide = scene.type === 'slide';
+  const slideContent = isSlide ? (scene.content as SlideContent) : null;
+  const displayNumber = sceneNumber ?? scene.order + 1;
+
+  return (
+    <div
+      data-testid="scene-item"
+      onClick={onSelect}
+      className={cn(
+        'group relative rounded-lg transition-all duration-200 cursor-pointer flex flex-col gap-1 p-1.5',
+        isActive
+          ? 'bg-[#8C1D40]/10 dark:bg-[#C75B7A]/20 ring-1 ring-[#8C1D40]/30 dark:ring-[#C75B7A]/40'
+          : 'hover:bg-gray-50/80 dark:hover:bg-gray-800/50',
+      )}
+    >
+      {/* Scene Header */}
+      <div className="flex justify-between items-center px-2 pt-0.5">
+        <div className="flex items-center gap-2 max-w-full">
+          <span
+            className={cn(
+              'text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shrink-0',
+              isActive
+                ? 'bg-[#8C1D40] dark:bg-[#C75B7A] text-white shadow-sm shadow-[#8C1D40]/30'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+            )}
+          >
+            {displayNumber}
+          </span>
+          <span
+            data-testid="scene-title"
+            className={cn(
+              'text-xs font-bold truncate transition-colors',
+              isActive
+                ? 'text-[#8C1D40] dark:text-[#C75B7A]'
+                : 'text-gray-600 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100',
+            )}
+          >
+            {scene.title}
+          </span>
+        </div>
+      </div>
+
+      {/* Thumbnail */}
+      <div className="relative aspect-video w-full rounded overflow-hidden bg-gray-100 dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/5">
+        <div className="absolute inset-0 flex items-center justify-center">
+          {isSlide && slideContent ? (
+            <ThumbnailSlide
+              slide={slideContent.canvas}
+              viewportSize={viewportSize}
+              viewportRatio={viewportRatio}
+              size={Math.max(100, sidebarWidth - 28)}
+            />
+          ) : scene.type === 'quiz' ? (
+            /* Quiz: question bar + 2x2 option grid */
+            <div className="w-full h-full bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/20 p-2 flex flex-col">
+              <div className="h-1.5 w-4/5 bg-orange-200/70 dark:bg-orange-700/30 rounded-full mb-1.5" />
+              <div className="flex-1 grid grid-cols-2 gap-1">
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'rounded flex items-center gap-1 px-1',
+                      i === 1
+                        ? 'bg-orange-400/20 dark:bg-orange-500/20 border border-orange-300/50 dark:border-orange-600/30'
+                        : 'bg-white/60 dark:bg-white/5 border border-orange-100/60 dark:border-orange-800/20',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'w-1.5 h-1.5 rounded-full shrink-0',
+                        i === 1
+                          ? 'bg-orange-400 dark:bg-orange-500'
+                          : 'bg-orange-200 dark:bg-orange-700/50',
+                      )}
+                    />
+                    <div
+                      className={cn(
+                        'h-1 rounded-full flex-1',
+                        i === 1
+                          ? 'bg-orange-300/60 dark:bg-orange-600/40'
+                          : 'bg-orange-100/80 dark:bg-orange-800/30',
+                      )}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : scene.type === 'interactive' ? (
+            /* Interactive: browser window with chrome + content */
+            <div className="w-full h-full bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 p-1.5 flex flex-col">
+              <div className="flex items-center gap-1 mb-1 pb-1 border-b border-emerald-200/40 dark:border-emerald-700/20">
+                <div className="flex gap-0.5">
+                  <div className="w-1 h-1 rounded-full bg-red-300 dark:bg-red-500/60" />
+                  <div className="w-1 h-1 rounded-full bg-amber-300 dark:bg-amber-500/60" />
+                  <div className="w-1 h-1 rounded-full bg-green-300 dark:bg-green-500/60" />
+                </div>
+                <div className="h-1.5 flex-1 bg-emerald-200/40 dark:bg-emerald-700/30 rounded-full ml-0.5" />
+              </div>
+              <div className="flex-1 flex gap-1">
+                <div className="w-1/4 space-y-1 pt-0.5">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-0.5 w-full bg-emerald-200/60 dark:bg-emerald-700/30 rounded-full"
+                    />
+                  ))}
+                </div>
+                <div className="flex-1 bg-emerald-100/40 dark:bg-emerald-800/20 rounded flex items-center justify-center border border-emerald-200/40 dark:border-emerald-700/20">
+                  <Globe className="w-4 h-4 text-emerald-300/80 dark:text-emerald-600/50" />
+                </div>
+              </div>
+            </div>
+          ) : scene.type === 'pbl' ? (
+            /* PBL: kanban board with 3 columns */
+            <div className="w-full h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20 p-1.5 flex flex-col">
+              <div className="flex items-center gap-1 mb-1.5">
+                <div className="w-1.5 h-1.5 rounded bg-blue-300 dark:bg-blue-600" />
+                <div className="h-1 w-8 bg-blue-200/60 dark:bg-blue-700/30 rounded-full" />
+              </div>
+              <div className="flex-1 flex gap-1 overflow-hidden">
+                {[0, 1, 2].map((col) => (
+                  <div
+                    key={col}
+                    className="flex-1 bg-white/50 dark:bg-white/5 rounded p-0.5 flex flex-col gap-0.5"
+                  >
+                    <div
+                      className={cn(
+                        'h-0.5 w-3 rounded-full mb-0.5',
+                        col === 0
+                          ? 'bg-blue-300/70'
+                          : col === 1
+                            ? 'bg-amber-300/70'
+                            : 'bg-green-300/70',
+                      )}
+                    />
+                    {Array.from({
+                      length: col === 0 ? 3 : col === 1 ? 2 : 1,
+                    }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-2 w-full bg-blue-100/60 dark:bg-blue-800/20 rounded border border-blue-200/30 dark:border-blue-700/20"
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Fallback */
+            <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-500">
+              <Icon className="w-4 h-4" />
+              <span className="text-[9px] font-bold uppercase tracking-wider opacity-80">
+                {scene.type}
+              </span>
+            </div>
+          )}
+
+          {isSlide && (
+            <div
+              className={cn(
+                'absolute inset-0 bg-[#8C1D40]/0 transition-colors',
+                isActive ? 'bg-[#8C1D40]/0' : 'group-hover:bg-black/5 dark:group-hover:bg-white/5',
+              )}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

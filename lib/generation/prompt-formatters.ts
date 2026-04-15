@@ -3,6 +3,7 @@
  */
 
 import type { PdfImage } from '@/lib/types/generation';
+import type { CourseSyllabus } from '@/lib/types/syllabus';
 import type { AgentInfo, SceneGenerationContext } from './pipeline-types';
 
 /** Build a course context string for injection into action prompts */
@@ -45,6 +46,74 @@ export function buildCourseContext(ctx?: SceneGenerationContext): string {
     const lastSpeech = ctx.previousSpeeches[ctx.previousSpeeches.length - 1];
     lines.push(`  "...${lastSpeech.slice(-150)}"`);
   }
+
+  return lines.join('\n');
+}
+
+/**
+ * Build a syllabus context string for injection into content and action prompts.
+ * Provides the AI with full course structure so it can make natural cross-module references.
+ *
+ * @param syllabus - The full course syllabus
+ * @param currentModuleIndex - 0-based index of the current module being generated
+ * @returns A text block describing course structure, current module, and prior modules
+ */
+export function buildSyllabusContext(
+  syllabus: CourseSyllabus,
+  currentModuleIndex?: number,
+): string {
+  const lines: string[] = [];
+
+  // Header
+  const courseCode = syllabus.courseCode ? ` (${syllabus.courseCode})` : '';
+  lines.push('=== Course Context ===');
+  lines.push(`Course: ${syllabus.title}${courseCode}`);
+
+  // Module outline with position marker
+  lines.push('');
+  lines.push('Module Outline:');
+  for (let i = 0; i < syllabus.modules.length; i++) {
+    const mod = syllabus.modules[i];
+    const topicsPreview = mod.topics.slice(0, 3).join(', ');
+    const marker = i === currentModuleIndex ? '  \u2190 CURRENT MODULE' : '';
+    lines.push(`  ${i + 1}. ${mod.title} \u2014 Topics: ${topicsPreview}${marker}`);
+  }
+
+  // Current module details
+  if (currentModuleIndex !== undefined && currentModuleIndex < syllabus.modules.length) {
+    const currentModule = syllabus.modules[currentModuleIndex];
+    lines.push('');
+    lines.push(`Current Module: Module ${currentModuleIndex + 1} \u2014 ${currentModule.title}`);
+    if (currentModule.learningObjectives.length > 0) {
+      lines.push(`  Objectives: ${currentModule.learningObjectives.join('; ')}`);
+    }
+
+    // Prior modules covered
+    if (currentModuleIndex > 0) {
+      lines.push('');
+      lines.push('Prior Modules Covered:');
+      for (let i = 0; i < currentModuleIndex; i++) {
+        const priorMod = syllabus.modules[i];
+        const priorTopics = priorMod.topics.slice(0, 3).join(', ');
+        lines.push(`  - Module ${i + 1} covered: ${priorTopics}`);
+      }
+    }
+  }
+
+  // Assessment strategy
+  if (syllabus.assessmentStrategy && syllabus.assessmentStrategy.components.length > 0) {
+    lines.push('');
+    const strategyParts = syllabus.assessmentStrategy.components.map(
+      (c) => `${c.name} (${c.weight}%)`,
+    );
+    lines.push(`Assessment Strategy: ${strategyParts.join(', ')}`);
+  }
+
+  // Instruction for the AI
+  lines.push('');
+  lines.push(
+    'INSTRUCTION: When creating content for this module, naturally reference concepts from prior modules where relevant. For example, "building on the data cleaning techniques from Module 1..." Do NOT literally quote prior content \u2014 use the module descriptions to bridge between topics.',
+  );
 
   return lines.join('\n');
 }

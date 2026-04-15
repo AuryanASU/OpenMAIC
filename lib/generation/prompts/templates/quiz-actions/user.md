@@ -3,6 +3,7 @@ Title: {{title}}
 Key Points: {{keyPoints}}
 Description: {{description}}
 {{courseContext}}
+{{syllabusContext}}
 {{agents}}
 
 **Language Requirement**: Generated speech content must be in the same language as the key points above.

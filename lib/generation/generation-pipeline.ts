@@ -29,7 +29,12 @@ export {
 export { parseJsonResponse, tryParseJson } from './json-repair';
 
 // Outline generator (Stage 1)
-export { generateSceneOutlinesFromRequirements, applyOutlineFallbacks } from './outline-generator';
+export {
+  generateSceneOutlinesFromRequirements,
+  applyOutlineFallbacks,
+  syllabusToOutlines,
+  syllabusToOutlinesWithAI,
+} from './outline-generator';
 
 // Scene generator (Stage 2)
 export {

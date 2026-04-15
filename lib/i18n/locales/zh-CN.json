@@ -165,6 +165,27 @@
     "quizReport": "答题报告",
     "retry": "重新答题"
   },
+  "assignment": {
+    "subtitle": "书面作业",
+    "criteriaCount": "个标准",
+    "pointsSuffix": "分",
+    "instructions": "作业要求",
+    "submissionGuidelines": "提交指南",
+    "due": "截止",
+    "startWriting": "开始写作",
+    "writing": "写作中",
+    "words": "字",
+    "chars": "字符",
+    "writingPlaceholder": "在此输入你的回答...",
+    "submitForGrading": "提交评分",
+    "aiGrading": "AI 正在评分中...",
+    "aiGradingWait": "请稍候，正在根据评分量规评估",
+    "report": "作业报告",
+    "retry": "重新开始",
+    "excellent": "优秀！",
+    "keepGoing": "继续加油！",
+    "needsReview": "需要复习"
+  },
   "roundtable": {
     "teacher": "教师",
     "you": "你",

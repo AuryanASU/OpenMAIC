@@ -7,6 +7,7 @@
  */
 export type PromptId =
   | 'requirements-to-outlines'
+  | 'module-to-outlines'
   | 'web-search-query-rewrite'
   | 'slide-content'
   | 'quiz-content'
@@ -15,7 +16,9 @@ export type PromptId =
   | 'interactive-scientific-model'
   | 'interactive-html'
   | 'interactive-actions'
-  | 'pbl-actions';
+  | 'pbl-actions'
+  | 'assignment-content'
+  | 'assignment-actions';
 
 /**
  * Snippet identifier

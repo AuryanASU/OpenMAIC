@@ -334,6 +334,54 @@ export async function callLLM<T extends GenerateTextParams>(
   throw lastError;
 }
 
+// ---------------------------------------------------------------------------
+// Retry with exponential backoff (rate-limit aware)
+// ---------------------------------------------------------------------------
+
+const MAX_RETRY_DELAY_MS = 30_000;
+
+/**
+ * Wrap an async function with exponential-backoff retry for rate-limit errors.
+ *
+ * Only retries when the error message contains "429" or "rate limit"
+ * (case-insensitive). All other errors are rethrown immediately.
+ *
+ * @param fn - The async operation to execute
+ * @param maxRetries - Maximum number of retry attempts (default 3)
+ * @param baseDelayMs - Base delay in ms; doubles each attempt (default 1000)
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 1000,
+): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      const message = error instanceof Error ? error.message : String(error);
+      const isRateLimit = message.includes('429') || /rate.?limit/i.test(message);
+
+      if (!isRateLimit || attempt >= maxRetries) {
+        throw error;
+      }
+
+      const delay = Math.min(baseDelayMs * Math.pow(2, attempt), MAX_RETRY_DELAY_MS);
+      log.warn(
+        `[withRetry] Rate-limit hit (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  // Should never reach here, but satisfy TypeScript
+  throw lastError;
+}
+
 /**
  * Unified wrapper around `streamText`.
  *

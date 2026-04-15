@@ -3,6 +3,7 @@ Title: {{title}}
 Key Points: {{keyPoints}}
 Description: {{description}}
 {{courseContext}}
+{{syllabusContext}}
 {{agents}}
 {{userProfile}}
 

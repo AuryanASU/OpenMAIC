@@ -66,6 +66,10 @@ export function createSceneAPI(store: StageStore) {
           actions: params.actions,
           createdAt: Date.now(),
           updatedAt: Date.now(),
+          // Module context (when generated from a syllabus)
+          ...(params.moduleId !== undefined && { moduleId: params.moduleId }),
+          ...(params.moduleTitle !== undefined && { moduleTitle: params.moduleTitle }),
+          ...(params.moduleIndex !== undefined && { moduleIndex: params.moduleIndex }),
         };
 
         const newScenes = [...state.scenes, newScene].sort((a, b) => a.order - b.order);

@@ -10,6 +10,7 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
+  GeneratedAssignmentContent,
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
@@ -125,7 +126,8 @@ export function buildCompleteScene(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedAssignmentContent,
   actions: Action[],
   stageId: string,
 ): Scene | null {
@@ -212,6 +214,41 @@ export function buildCompleteScene(
       content: {
         type: 'pbl',
         projectConfig: content.projectConfig,
+      },
+      actions,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+  }
+
+  if (outline.type === 'assignment' && 'instructions' in content && 'rubric' in content) {
+    const assignmentContent = content as GeneratedAssignmentContent;
+    return {
+      id: sceneId,
+      stageId,
+      type: 'assignment',
+      title: outline.title,
+      order: outline.order,
+      content: {
+        type: 'assignment',
+        title: assignmentContent.title,
+        instructions: assignmentContent.instructions,
+        rubric: {
+          id: nanoid(),
+          title: assignmentContent.rubric.title,
+          totalPoints: assignmentContent.rubric.totalPoints,
+          criteria: assignmentContent.rubric.criteria.map((c) => ({
+            id: nanoid(),
+            name: c.name,
+            description: c.description,
+            weight: c.weight,
+            levels: c.levels,
+          })),
+        },
+        submissionGuidelines: assignmentContent.submissionGuidelines,
+        dueDescription: assignmentContent.dueDescription,
+        gradingMode: 'ai' as const,
+        aiGradingPrompt: assignmentContent.aiGradingPrompt,
       },
       actions,
       createdAt: Date.now(),

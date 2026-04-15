@@ -28,6 +28,10 @@ export interface CreateSceneParams {
   content?: Partial<SceneContent>;
   order?: number;
   actions?: Action[];
+  // Module context (when generated from a syllabus)
+  moduleId?: string;
+  moduleTitle?: string;
+  moduleIndex?: number;
 }
 
 /**

@@ -6,6 +6,7 @@ import { SlideEditor as SlideRenderer } from '../slide-renderer/Editor';
 import { QuizView } from '../scene-renderers/quiz-view';
 import { InteractiveRenderer } from '../scene-renderers/interactive-renderer';
 import { PBLRenderer } from '../scene-renderers/pbl-renderer';
+import { AssignmentView } from '../scene-renderers/assignment-view';
 
 interface SceneRendererProps {
   readonly scene: Scene;
@@ -27,6 +28,11 @@ export function SceneRenderer({ scene, mode }: SceneRendererProps) {
       case 'pbl':
         if (scene.content.type !== 'pbl') return <div>Invalid PBL content</div>;
         return <PBLRenderer content={scene.content} mode={mode} sceneId={scene.id} />;
+      case 'assignment':
+        if (scene.content.type !== 'assignment') return <div>Invalid assignment content</div>;
+        return (
+          <AssignmentView key={scene.id} content={scene.content} sceneId={scene.id} mode={mode} />
+        );
       default:
         return <div>Unknown scene type</div>;
     }

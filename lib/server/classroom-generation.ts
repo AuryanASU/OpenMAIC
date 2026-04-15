@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { callLLM } from '@/lib/ai/llm';
+import { callLLM, withRetry } from '@/lib/ai/llm';
 import { createStageAPI } from '@/lib/api/stage-api';
 import type { StageStore } from '@/lib/api/stage-api-types';
 import {
@@ -11,9 +11,12 @@ import {
   generateSceneActions,
   generateSceneContent,
 } from '@/lib/generation/scene-generator';
-import type { AICallFn } from '@/lib/generation/pipeline-types';
+import type { AICallFn, SceneGenerationContext } from '@/lib/generation/pipeline-types';
 import type { AgentInfo } from '@/lib/generation/pipeline-types';
-import { formatTeacherPersonaForPrompt } from '@/lib/generation/prompt-formatters';
+import {
+  formatTeacherPersonaForPrompt,
+  buildSyllabusContext,
+} from '@/lib/generation/prompt-formatters';
 import { getDefaultAgents } from '@/lib/orchestration/registry/store';
 import { createLogger } from '@/lib/logger';
 import { isProviderKeyRequired } from '@/lib/ai/providers';
@@ -42,6 +45,10 @@ export interface GenerateClassroomInput {
   enableVideoGeneration?: boolean;
   enableTTS?: boolean;
   agentMode?: 'default' | 'generate';
+  /** When provided, drives module-aware outline generation */
+  syllabus?: import('@/lib/types/syllabus').CourseSyllabus;
+  /** Controls how syllabus modules are expanded to scene outlines */
+  expansionMode?: 'ai' | 'deterministic';
 }
 
 export type ClassroomGenerationStep =
@@ -159,6 +166,126 @@ Return a JSON object with this exact structure:
     role: a.role,
     persona: a.persona,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Batched scene generation — process outlines in parallel batches
+// ---------------------------------------------------------------------------
+
+async function generateScenesBatched(
+  outlines: import('@/lib/types/generation').SceneOutline[],
+  aiCall: AICallFn,
+  api: ReturnType<typeof createStageAPI>,
+  agents: AgentInfo[],
+  options: {
+    batchSize?: number;
+    batchDelayMs?: number;
+    onProgress?: (progress: ClassroomGenerationProgress) => Promise<void> | void;
+    syllabus?: import('@/lib/types/syllabus').CourseSyllabus;
+  },
+): Promise<void> {
+  const batchSize = options.batchSize ?? 5;
+  const batchDelayMs = options.batchDelayMs ?? 1000;
+  const totalScenes = outlines.length;
+
+  // Split outlines into batches
+  const batches: import('@/lib/types/generation').SceneOutline[][] = [];
+  for (let i = 0; i < outlines.length; i += batchSize) {
+    batches.push(outlines.slice(i, i + batchSize));
+  }
+
+  let completedScenes = 0;
+  let failedScenes = 0;
+
+  for (const [batchIndex, batch] of batches.entries()) {
+    const batchNum = batchIndex + 1;
+    log.info(`Processing batch ${batchNum}/${batches.length} (${batch.length} scenes)`);
+
+    const results = await Promise.allSettled(
+      batch.map(async (outline) => {
+        const safeOutline = applyOutlineFallbacks(outline, true);
+
+        // Wrap AI calls with retry for rate-limit resilience
+        const retryAiCall: AICallFn = (systemPrompt, userPrompt, images) =>
+          withRetry(() => aiCall(systemPrompt, userPrompt, images));
+
+        // Build module-specific syllabus context (marks the current module)
+        const sceneSyllabusContext = options.syllabus
+          ? buildSyllabusContext(options.syllabus, safeOutline.moduleIndex)
+          : '';
+
+        const content = await generateSceneContent(
+          safeOutline,
+          retryAiCall,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          agents,
+          sceneSyllabusContext || undefined,
+        );
+        if (!content) {
+          throw new Error(`Content generation failed for "${safeOutline.title}"`);
+        }
+
+        // Build scene generation context with syllabus info for action generation
+        const outlineIndex = outlines.indexOf(outline);
+        const sceneCtx: SceneGenerationContext = {
+          pageIndex: outlineIndex + 1,
+          totalPages: outlines.length,
+          allTitles: outlines.map((o) => o.title),
+          previousSpeeches: [],
+          ...(sceneSyllabusContext ? { syllabusContext: sceneSyllabusContext } : {}),
+        };
+
+        const actions = await generateSceneActions(
+          safeOutline,
+          content,
+          retryAiCall,
+          sceneCtx,
+          agents,
+        );
+        log.info(`Scene "${safeOutline.title}": ${actions.length} actions`);
+
+        const sceneId = createSceneWithActions(safeOutline, content, actions, api);
+        if (!sceneId) {
+          throw new Error(`Scene creation failed for "${safeOutline.title}"`);
+        }
+
+        return sceneId;
+      }),
+    );
+
+    // Tally results
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        completedScenes += 1;
+      } else {
+        failedScenes += 1;
+        log.warn(`Scene generation failed in batch ${batchNum}:`, result.reason);
+      }
+    }
+
+    // Report progress after each batch
+    const progress = 30 + Math.floor((completedScenes / totalScenes) * 60);
+    await options.onProgress?.({
+      step: 'generating_scenes',
+      progress: Math.min(progress, 90),
+      message: `Generated batch ${batchNum}/${batches.length} (${completedScenes}/${totalScenes} scenes)`,
+      scenesGenerated: completedScenes,
+      totalScenes,
+    });
+
+    // Delay between batches for rate-limit breathing room (skip after last batch)
+    if (batchIndex < batches.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+    }
+  }
+
+  log.info(
+    `Batched generation complete: ${completedScenes} succeeded, ${failedScenes} failed out of ${totalScenes}`,
+  );
 }
 
 export async function generateClassroom(
@@ -305,6 +432,8 @@ export async function generateClassroom(
       videoGenerationEnabled: input.enableVideoGeneration,
       researchContext,
       teacherContext,
+      syllabus: input.syllabus,
+      expansionMode: input.expansionMode,
     },
   );
 
@@ -357,53 +486,84 @@ export async function generateClassroom(
   const api = createStageAPI(store);
 
   log.info('Stage 2: Generating scene content and actions...');
-  let generatedScenes = 0;
 
-  for (const [index, outline] of outlines.entries()) {
-    const safeOutline = applyOutlineFallbacks(outline, true);
-    const progressStart = 30 + Math.floor((index / Math.max(outlines.length, 1)) * 60);
+  // Build syllabus context once for injection into scene generation prompts
+  const syllabusContext = input.syllabus ? buildSyllabusContext(input.syllabus) : '';
 
-    await options.onProgress?.({
-      step: 'generating_scenes',
-      progress: Math.max(progressStart, 31),
-      message: `Generating scene ${index + 1}/${outlines.length}: ${safeOutline.title}`,
-      scenesGenerated: generatedScenes,
-      totalScenes: outlines.length,
+  if (outlines.length > 15) {
+    // Large course — use batched parallel generation
+    log.info(`Using batched generation for ${outlines.length} scenes (batch size 5)`);
+    await generateScenesBatched(outlines, aiCall, api, agents, {
+      batchSize: 5,
+      batchDelayMs: 1000,
+      onProgress: options.onProgress,
+      syllabus: input.syllabus,
     });
+  } else {
+    // Small course — keep sequential generation for nice incremental UX
+    let generatedScenes = 0;
 
-    const content = await generateSceneContent(
-      safeOutline,
-      aiCall,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      agents,
-    );
-    if (!content) {
-      log.warn(`Skipping scene "${safeOutline.title}" — content generation failed`);
-      continue;
+    for (const [index, outline] of outlines.entries()) {
+      const safeOutline = applyOutlineFallbacks(outline, true);
+      const progressStart = 30 + Math.floor((index / Math.max(outlines.length, 1)) * 60);
+
+      await options.onProgress?.({
+        step: 'generating_scenes',
+        progress: Math.max(progressStart, 31),
+        message: `Generating scene ${index + 1}/${outlines.length}: ${safeOutline.title}`,
+        scenesGenerated: generatedScenes,
+        totalScenes: outlines.length,
+      });
+
+      // Build module-specific syllabus context (marks the current module)
+      const sceneSyllabusContext = input.syllabus
+        ? buildSyllabusContext(input.syllabus, safeOutline.moduleIndex)
+        : '';
+
+      const content = await generateSceneContent(
+        safeOutline,
+        aiCall,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        agents,
+        sceneSyllabusContext || undefined,
+      );
+      if (!content) {
+        log.warn(`Skipping scene "${safeOutline.title}" — content generation failed`);
+        continue;
+      }
+
+      // Build scene generation context with syllabus info for action generation
+      const sceneCtx: SceneGenerationContext = {
+        pageIndex: index + 1,
+        totalPages: outlines.length,
+        allTitles: outlines.map((o) => o.title),
+        previousSpeeches: [],
+        ...(sceneSyllabusContext ? { syllabusContext: sceneSyllabusContext } : {}),
+      };
+
+      const actions = await generateSceneActions(safeOutline, content, aiCall, sceneCtx, agents);
+      log.info(`Scene "${safeOutline.title}": ${actions.length} actions`);
+
+      const sceneId = createSceneWithActions(safeOutline, content, actions, api);
+      if (!sceneId) {
+        log.warn(`Skipping scene "${safeOutline.title}" — scene creation failed`);
+        continue;
+      }
+
+      generatedScenes += 1;
+      const progressEnd = 30 + Math.floor(((index + 1) / Math.max(outlines.length, 1)) * 60);
+      await options.onProgress?.({
+        step: 'generating_scenes',
+        progress: Math.min(progressEnd, 90),
+        message: `Generated ${generatedScenes}/${outlines.length} scenes`,
+        scenesGenerated: generatedScenes,
+        totalScenes: outlines.length,
+      });
     }
-
-    const actions = await generateSceneActions(safeOutline, content, aiCall, undefined, agents);
-    log.info(`Scene "${safeOutline.title}": ${actions.length} actions`);
-
-    const sceneId = createSceneWithActions(safeOutline, content, actions, api);
-    if (!sceneId) {
-      log.warn(`Skipping scene "${safeOutline.title}" — scene creation failed`);
-      continue;
-    }
-
-    generatedScenes += 1;
-    const progressEnd = 30 + Math.floor(((index + 1) / Math.max(outlines.length, 1)) * 60);
-    await options.onProgress?.({
-      step: 'generating_scenes',
-      progress: Math.min(progressEnd, 90),
-      message: `Generated ${generatedScenes}/${outlines.length} scenes`,
-      scenesGenerated: generatedScenes,
-      totalScenes: outlines.length,
-    });
   }
 
   const scenes = store.getState().scenes;

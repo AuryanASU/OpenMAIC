@@ -14,6 +14,7 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
+  GeneratedAssignmentContent,
   ScientificModel,
   PdfImage,
   ImageMapping,
@@ -155,11 +156,13 @@ export async function generateSceneContent(
   visionEnabled?: boolean,
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
+  syllabusContext?: string,
 ): Promise<
   | GeneratedSlideContent
   | GeneratedQuizContent
   | GeneratedInteractiveContent
   | GeneratedPBLContent
+  | GeneratedAssignmentContent
   | null
 > {
   // If outline is interactive but missing interactiveConfig, fall back to slide
@@ -176,6 +179,7 @@ export async function generateSceneContent(
       visionEnabled,
       generatedMediaMapping,
       agents,
+      syllabusContext,
     );
   }
 
@@ -189,13 +193,16 @@ export async function generateSceneContent(
         visionEnabled,
         generatedMediaMapping,
         agents,
+        syllabusContext,
       );
     case 'quiz':
-      return generateQuizContent(outline, aiCall);
+      return generateQuizContent(outline, aiCall, syllabusContext);
     case 'interactive':
       return generateInteractiveContent(outline, aiCall, outline.language);
     case 'pbl':
       return generatePBLSceneContent(outline, languageModel);
+    case 'assignment':
+      return generateAssignmentContent(outline, aiCall, syllabusContext);
     default:
       return null;
   }
@@ -466,6 +473,7 @@ async function generateSlideContent(
   visionEnabled?: boolean,
   generatedMediaMapping?: ImageMapping,
   agents?: AgentInfo[],
+  syllabusContext?: string,
 ): Promise<GeneratedSlideContent | null> {
   const lang = outline.language || 'zh-CN';
 
@@ -544,6 +552,7 @@ async function generateSlideContent(
     canvas_width: canvasWidth,
     canvas_height: canvasHeight,
     teacherContext,
+    syllabusContext: syllabusContext || '',
   });
 
   if (!prompts) {
@@ -632,6 +641,7 @@ async function generateSlideContent(
 async function generateQuizContent(
   outline: SceneOutline,
   aiCall: AICallFn,
+  syllabusContext?: string,
 ): Promise<GeneratedQuizContent | null> {
   const quizConfig = outline.quizConfig || {
     questionCount: 3,
@@ -646,6 +656,7 @@ async function generateQuizContent(
     questionCount: quizConfig.questionCount,
     difficulty: quizConfig.difficulty,
     questionTypes: quizConfig.questionTypes.join(', '),
+    syllabusContext: syllabusContext || '',
   });
 
   if (!prompts) {
@@ -866,6 +877,80 @@ async function generatePBLSceneContent(
 }
 
 /**
+ * Generate assignment content
+ */
+async function generateAssignmentContent(
+  outline: SceneOutline,
+  aiCall: AICallFn,
+  syllabusContext?: string,
+): Promise<GeneratedAssignmentContent | null> {
+  const assignmentConfig = outline.assignmentConfig || {
+    assignmentType: 'essay' as const,
+    estimatedLength: 'medium' as const,
+    rubricFocus: outline.keyPoints || [],
+  };
+
+  const prompts = buildPrompt(PROMPT_IDS.ASSIGNMENT_CONTENT, {
+    title: outline.title,
+    description: outline.description,
+    keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+    assignmentType: assignmentConfig.assignmentType,
+    estimatedLength: assignmentConfig.estimatedLength,
+    rubricFocus: (assignmentConfig.rubricFocus || []).join(', '),
+    syllabusContext: syllabusContext || '',
+    language: outline.language || 'en-US',
+  });
+
+  if (!prompts) {
+    log.warn(`Failed to build assignment prompt for: ${outline.title}`);
+    return null;
+  }
+
+  log.debug(`Generating assignment content for: ${outline.title}`);
+  const response = await aiCall(prompts.system, prompts.user);
+  const generatedContent = parseJsonResponse<GeneratedAssignmentContent>(response);
+
+  if (!generatedContent || !generatedContent.rubric || !generatedContent.instructions) {
+    log.error(`Failed to parse AI response for assignment: ${outline.title}`);
+    return null;
+  }
+
+  // Validate rubric structure
+  const criteria = generatedContent.rubric.criteria;
+  if (!Array.isArray(criteria) || criteria.length === 0) {
+    log.error(`Assignment rubric has no criteria: ${outline.title}`);
+    return null;
+  }
+
+  // Validate criteria weights sum to ~100
+  const weightSum = criteria.reduce((sum, c) => sum + (c.weight || 0), 0);
+  if (Math.abs(weightSum - 100) > 5) {
+    log.warn(
+      `Rubric criteria weights sum to ${weightSum} (expected ~100), normalizing for: ${outline.title}`,
+    );
+    // Normalize weights to sum to 100
+    const scale = 100 / weightSum;
+    for (const criterion of criteria) {
+      criterion.weight = Math.round(criterion.weight * scale);
+    }
+  }
+
+  // Validate each criterion has ordered levels
+  for (const criterion of criteria) {
+    if (!Array.isArray(criterion.levels) || criterion.levels.length === 0) {
+      log.warn(`Criterion "${criterion.name}" has no levels, skipping validation`);
+      continue;
+    }
+    // Ensure levels are ordered by points descending (Excellent → Beginning)
+    criterion.levels.sort((a, b) => b.points - a.points);
+  }
+
+  log.debug(`Generated assignment with ${criteria.length} rubric criteria for: ${outline.title}`);
+
+  return generatedContent;
+}
+
+/**
  * Extract HTML document from AI response.
  * Tries to find <!DOCTYPE html>...</html> first, then falls back to code block extraction.
  */
@@ -911,7 +996,8 @@ export async function generateSceneActions(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedAssignmentContent,
   aiCall: AICallFn,
   ctx?: SceneGenerationContext,
   agents?: AgentInfo[],
@@ -923,12 +1009,14 @@ export async function generateSceneActions(
     // Format element list for AI to select from
     const elementsText = formatElementsForPrompt(content.elements);
 
+    const syllabusCtx = ctx?.syllabusContext || '';
     const prompts = buildPrompt(PROMPT_IDS.SLIDE_ACTIONS, {
       title: outline.title,
       keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
       description: outline.description,
       elements: elementsText,
       courseContext: buildCourseContext(ctx),
+      syllabusContext: syllabusCtx,
       agents: agentsText,
       userProfile: userProfile || '',
     });
@@ -952,12 +1040,14 @@ export async function generateSceneActions(
     // Format question list for AI reference
     const questionsText = formatQuestionsForPrompt(content.questions);
 
+    const syllabusCtx = ctx?.syllabusContext || '';
     const prompts = buildPrompt(PROMPT_IDS.QUIZ_ACTIONS, {
       title: outline.title,
       keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
       description: outline.description,
       questions: questionsText,
       courseContext: buildCourseContext(ctx),
+      syllabusContext: syllabusCtx,
       agents: agentsText,
     });
 
@@ -978,6 +1068,7 @@ export async function generateSceneActions(
   if (outline.type === 'interactive' && 'html' in content) {
     const config = outline.interactiveConfig;
     const agentsText = formatAgentsForPrompt(agents);
+    const syllabusCtx = ctx?.syllabusContext || '';
     const prompts = buildPrompt(PROMPT_IDS.INTERACTIVE_ACTIONS, {
       title: outline.title,
       keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
@@ -985,6 +1076,7 @@ export async function generateSceneActions(
       conceptName: config?.conceptName || outline.title,
       designIdea: config?.designIdea || '',
       courseContext: buildCourseContext(ctx),
+      syllabusContext: syllabusCtx,
       agents: agentsText,
     });
 
@@ -1005,6 +1097,7 @@ export async function generateSceneActions(
   if (outline.type === 'pbl' && 'projectConfig' in content) {
     const pblConfig = outline.pblConfig;
     const agentsText = formatAgentsForPrompt(agents);
+    const syllabusCtx = ctx?.syllabusContext || '';
     const prompts = buildPrompt(PROMPT_IDS.PBL_ACTIONS, {
       title: outline.title,
       keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
@@ -1012,6 +1105,7 @@ export async function generateSceneActions(
       projectTopic: pblConfig?.projectTopic || outline.title,
       projectDescription: pblConfig?.projectDescription || outline.description,
       courseContext: buildCourseContext(ctx),
+      syllabusContext: syllabusCtx,
       agents: agentsText,
     });
 
@@ -1029,6 +1123,42 @@ export async function generateSceneActions(
     return generateDefaultPBLActions(outline);
   }
 
+  if (outline.type === 'assignment' && 'instructions' in content) {
+    const assignmentContent = content as GeneratedAssignmentContent;
+    const assignmentConfig = outline.assignmentConfig;
+    const syllabusCtx = ctx?.syllabusContext || '';
+
+    // Format rubric criteria for the action prompt
+    const rubricCriteria = assignmentContent.rubric.criteria
+      .map((c) => `- ${c.name} (${c.weight}%): ${c.description}`)
+      .join('\n');
+
+    const prompts = buildPrompt(PROMPT_IDS.ASSIGNMENT_ACTIONS, {
+      title: outline.title,
+      keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+      description: outline.description,
+      assignmentType: assignmentConfig?.assignmentType || 'essay',
+      rubricCriteria,
+      submissionGuidelines: assignmentContent.submissionGuidelines || '',
+      courseContext: buildCourseContext(ctx),
+      syllabusContext: syllabusCtx,
+      agents: agentsText,
+    });
+
+    if (!prompts) {
+      return generateDefaultAssignmentActions(outline);
+    }
+
+    const response = await aiCall(prompts.system, prompts.user);
+    const actions = parseActionsFromStructuredOutput(response, outline.type);
+
+    if (actions.length > 0) {
+      return processActions(actions, [], agents);
+    }
+
+    return generateDefaultAssignmentActions(outline);
+  }
+
   return [];
 }
 
@@ -1042,6 +1172,20 @@ function generateDefaultPBLActions(_outline: SceneOutline): Action[] {
       type: 'speech',
       title: 'PBL 项目介绍',
       text: '现在让我们开始一个项目式学习活动。请选择你的角色，查看任务看板，开始协作完成项目。',
+    },
+  ];
+}
+
+/**
+ * Generate default assignment Actions (fallback)
+ */
+function generateDefaultAssignmentActions(_outline: SceneOutline): Action[] {
+  return [
+    {
+      id: `action_${nanoid(8)}`,
+      type: 'speech',
+      title: 'Assignment Introduction',
+      text: 'Now let us move on to a written assignment. Please review the instructions and rubric carefully before you begin.',
     },
   ];
 }
@@ -1206,7 +1350,8 @@ export function createSceneWithActions(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedAssignmentContent,
   actions: Action[],
   api: ReturnType<typeof createStageAPI>,
 ): string | null {
@@ -1230,6 +1375,13 @@ export function createSceneWithActions(
       background: content.background,
     };
 
+    // Module metadata from the outline (present when generated from a syllabus)
+    const moduleFields = {
+      ...(outline.moduleId !== undefined && { moduleId: outline.moduleId }),
+      ...(outline.moduleTitle !== undefined && { moduleTitle: outline.moduleTitle }),
+      ...(outline.moduleIndex !== undefined && { moduleIndex: outline.moduleIndex }),
+    };
+
     const sceneResult = api.scene.create({
       type: 'slide',
       title: outline.title,
@@ -1239,12 +1391,19 @@ export function createSceneWithActions(
         canvas: slide,
       },
       actions,
+      ...moduleFields,
     });
 
     return sceneResult.success ? (sceneResult.data ?? null) : null;
   }
 
   if (outline.type === 'quiz' && 'questions' in content) {
+    const moduleFields = {
+      ...(outline.moduleId !== undefined && { moduleId: outline.moduleId }),
+      ...(outline.moduleTitle !== undefined && { moduleTitle: outline.moduleTitle }),
+      ...(outline.moduleIndex !== undefined && { moduleIndex: outline.moduleIndex }),
+    };
+
     const sceneResult = api.scene.create({
       type: 'quiz',
       title: outline.title,
@@ -1254,12 +1413,19 @@ export function createSceneWithActions(
         questions: content.questions,
       },
       actions,
+      ...moduleFields,
     });
 
     return sceneResult.success ? (sceneResult.data ?? null) : null;
   }
 
   if (outline.type === 'interactive' && 'html' in content) {
+    const moduleFields = {
+      ...(outline.moduleId !== undefined && { moduleId: outline.moduleId }),
+      ...(outline.moduleTitle !== undefined && { moduleTitle: outline.moduleTitle }),
+      ...(outline.moduleIndex !== undefined && { moduleIndex: outline.moduleIndex }),
+    };
+
     const sceneResult = api.scene.create({
       type: 'interactive',
       title: outline.title,
@@ -1270,12 +1436,19 @@ export function createSceneWithActions(
         html: content.html,
       },
       actions,
+      ...moduleFields,
     });
 
     return sceneResult.success ? (sceneResult.data ?? null) : null;
   }
 
   if (outline.type === 'pbl' && 'projectConfig' in content) {
+    const moduleFields = {
+      ...(outline.moduleId !== undefined && { moduleId: outline.moduleId }),
+      ...(outline.moduleTitle !== undefined && { moduleTitle: outline.moduleTitle }),
+      ...(outline.moduleIndex !== undefined && { moduleIndex: outline.moduleIndex }),
+    };
+
     const sceneResult = api.scene.create({
       type: 'pbl',
       title: outline.title,
@@ -1285,6 +1458,47 @@ export function createSceneWithActions(
         projectConfig: content.projectConfig,
       },
       actions,
+      ...moduleFields,
+    });
+
+    return sceneResult.success ? (sceneResult.data ?? null) : null;
+  }
+
+  if (outline.type === 'assignment' && 'instructions' in content && 'rubric' in content) {
+    const assignmentContent = content as GeneratedAssignmentContent;
+    const moduleFields = {
+      ...(outline.moduleId !== undefined && { moduleId: outline.moduleId }),
+      ...(outline.moduleTitle !== undefined && { moduleTitle: outline.moduleTitle }),
+      ...(outline.moduleIndex !== undefined && { moduleIndex: outline.moduleIndex }),
+    };
+
+    const sceneResult = api.scene.create({
+      type: 'assignment',
+      title: outline.title,
+      order: outline.order,
+      content: {
+        type: 'assignment',
+        title: assignmentContent.title,
+        instructions: assignmentContent.instructions,
+        rubric: {
+          id: nanoid(),
+          title: assignmentContent.rubric.title,
+          totalPoints: assignmentContent.rubric.totalPoints,
+          criteria: assignmentContent.rubric.criteria.map((c) => ({
+            id: nanoid(),
+            name: c.name,
+            description: c.description,
+            weight: c.weight,
+            levels: c.levels,
+          })),
+        },
+        submissionGuidelines: assignmentContent.submissionGuidelines,
+        dueDescription: assignmentContent.dueDescription,
+        gradingMode: 'ai' as const,
+        aiGradingPrompt: assignmentContent.aiGradingPrompt,
+      },
+      actions,
+      ...moduleFields,
     });
 
     return sceneResult.success ? (sceneResult.data ?? null) : null;

@@ -41,7 +41,7 @@ export interface CourseModule {
   topics: string[]; // Key topics covered
   learningObjectives: string[]; // Module-level objectives
   estimatedWeeks?: number;
-  sceneTypes?: ('slide' | 'quiz' | 'interactive' | 'pbl')[];
+  sceneTypes?: ('slide' | 'quiz' | 'interactive' | 'pbl' | 'assignment')[];
 }
 
 /** Request body for POST /api/generate-syllabus */

@@ -1,3 +1,5 @@
+{{syllabusContext}}
+
 # Generation Requirements
 
 ## Scene Information

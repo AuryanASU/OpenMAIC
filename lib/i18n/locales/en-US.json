@@ -165,6 +165,27 @@
     "quizReport": "Quiz Report",
     "retry": "Retry"
   },
+  "assignment": {
+    "subtitle": "Written Assignment",
+    "criteriaCount": "criteria",
+    "pointsSuffix": "pts",
+    "instructions": "Instructions",
+    "submissionGuidelines": "Submission Guidelines",
+    "due": "Due",
+    "startWriting": "Start Writing",
+    "writing": "Writing",
+    "words": "words",
+    "chars": "chars",
+    "writingPlaceholder": "Write your response here...",
+    "submitForGrading": "Submit for Grading",
+    "aiGrading": "AI is grading your submission...",
+    "aiGradingWait": "Please wait, evaluating against the rubric",
+    "report": "Assignment Report",
+    "retry": "Start Over",
+    "excellent": "Excellent!",
+    "keepGoing": "Keep going!",
+    "needsReview": "Needs review"
+  },
   "roundtable": {
     "teacher": "TEACHER",
     "you": "YOU",

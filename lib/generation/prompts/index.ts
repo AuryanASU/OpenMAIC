@@ -22,6 +22,7 @@ export {
 // Prompt IDs constant
 export const PROMPT_IDS = {
   REQUIREMENTS_TO_OUTLINES: 'requirements-to-outlines',
+  MODULE_TO_OUTLINES: 'module-to-outlines',
   WEB_SEARCH_QUERY_REWRITE: 'web-search-query-rewrite',
   SLIDE_CONTENT: 'slide-content',
   QUIZ_CONTENT: 'quiz-content',
@@ -31,4 +32,6 @@ export const PROMPT_IDS = {
   INTERACTIVE_HTML: 'interactive-html',
   INTERACTIVE_ACTIONS: 'interactive-actions',
   PBL_ACTIONS: 'pbl-actions',
+  ASSIGNMENT_CONTENT: 'assignment-content',
+  ASSIGNMENT_ACTIONS: 'assignment-actions',
 } as const;

@@ -1,3 +1,5 @@
+{{syllabusContext}}
+
 Title: {{title}}
 Description: {{description}}
 Test Points: {{keyPoints}}

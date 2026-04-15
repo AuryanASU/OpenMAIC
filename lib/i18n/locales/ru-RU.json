@@ -165,6 +165,27 @@
     "quizReport": "Результаты теста",
     "retry": "Повторить"
   },
+  "assignment": {
+    "subtitle": "Письменное задание",
+    "criteriaCount": "критериев",
+    "pointsSuffix": "баллов",
+    "instructions": "Инструкции",
+    "submissionGuidelines": "Требования к оформлению",
+    "due": "Срок сдачи",
+    "startWriting": "Начать написание",
+    "writing": "Написание",
+    "words": "слов",
+    "chars": "символов",
+    "writingPlaceholder": "Введите ваш ответ здесь...",
+    "submitForGrading": "Отправить на проверку",
+    "aiGrading": "AI проверяет задание...",
+    "aiGradingWait": "Пожалуйста подождите, оцениваем по критериям",
+    "report": "Отчёт по заданию",
+    "retry": "Начать заново",
+    "excellent": "Отлично!",
+    "keepGoing": "Продолжайте в том же духе!",
+    "needsReview": "Требуется доработка"
+  },
   "roundtable": {
     "teacher": "УЧИТЕЛЬ",
     "you": "ВЫ",
