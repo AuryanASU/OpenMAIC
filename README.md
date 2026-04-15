@@ -42,6 +42,8 @@
 
 ## 📖 Overview
 
+> **ASU AI Classroom** is Arizona State University's managed deployment of OpenMAIC. All AI providers are configured server-side — users never supply API keys or select models. See [CLAUDE.md](CLAUDE.md) for deployment and branding details.
+
 **OpenMAIC** (Open Multi-Agent Interactive Classroom) is an open-source AI platform that turns any topic or document into a rich, interactive classroom experience. Powered by multi-agent orchestration, it generates slides, quizzes, interactive simulations, and project-based learning activities — all delivered by AI teachers and AI classmates who can speak, draw on a whiteboard, and engage in real-time discussions with you. With built-in [OpenClaw](https://github.com/openclaw/openclaw) integration, you can generate classrooms directly from messaging apps like Feishu, Slack, or Telegram.
 
 https://github.com/user-attachments/assets/b4ab35ac-f994-46b1-8957-e82fe87ff0e9
@@ -95,16 +97,20 @@ pnpm install
 cp .env.example .env.local
 ```
 
-Fill in at least one LLM provider key:
+**ASU AI Classroom (managed platform)** — all providers are server-side. Set these environment variables (e.g. in Vercel or `.env.local`):
 
-```env
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_API_KEY=...
-GROK_API_KEY=xai-...
-```
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `ANTHROPIC_API_KEY` | **Yes** | Powers all AI generation (Claude Sonnet 4.6) |
+| `ELEVENLABS_API_KEY` | Optional | Enables text-to-speech |
+| `GOOGLE_AI_API_KEY` | Optional | Enables image generation (Imagen) and video generation (VEO) |
+| `TAVILY_API_KEY` | Optional | Enables web search enrichment |
 
-You can also configure providers via `server-providers.yml`:
+Features auto-enable when their respective env vars are present (see `lib/server/platform-config.ts`). Users never see provider selection or API key inputs — all configuration is operator-side.
+
+---
+
+**Upstream / self-hosted OpenMAIC** — configure providers via `server-providers.yml` or `.env.local`:
 
 ```yaml
 providers:
@@ -116,28 +122,7 @@ providers:
 
 Supported providers: **OpenAI**, **Anthropic**, **Google Gemini**, **DeepSeek**, **MiniMax**, **Grok (xAI)**, and any OpenAI-compatible API.
 
-MiniMax quick examples:
-
-```env
-MINIMAX_API_KEY=...
-MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic/v1
-DEFAULT_MODEL=minimax:MiniMax-M2.7-highspeed
-
-TTS_MINIMAX_API_KEY=...
-TTS_MINIMAX_BASE_URL=https://api.minimaxi.com
-
-IMAGE_MINIMAX_API_KEY=...
-IMAGE_MINIMAX_BASE_URL=https://api.minimaxi.com
-
-VIDEO_MINIMAX_API_KEY=...
-VIDEO_MINIMAX_BASE_URL=https://api.minimaxi.com
-```
-
 > **Recommended model:** **Gemini 3 Flash** — best balance of quality and speed. For highest quality (at slower speed), try **Gemini 3.1 Pro**.
->
-> If you want OpenMAIC server APIs to use Gemini by default, also set `DEFAULT_MODEL=google:gemini-3-flash-preview`.
->
-> If you want to use MiniMax as the default server model, set `DEFAULT_MODEL=minimax:MiniMax-M2.7-highspeed`.
 
 ### 3. Run
 
@@ -398,24 +383,28 @@ We welcome contributions from the community! Whether it's bug reports, feature i
 ```
 OpenMAIC/
 ├── app/                        # Next.js App Router
-│   ├── api/                    #   Server API routes (~18 endpoints)
+│   ├── api/                    #   Server API routes
 │   │   ├── generate/           #     Scene generation pipeline (outlines, content, images, TTS …)
 │   │   ├── generate-classroom/ #     Async classroom job submission + polling
+│   │   ├── generate-syllabus/  #     SSE streaming syllabus generation from topic text
+│   │   ├── parse-syllabus/     #     PDF upload → AI parsing into structured syllabus
 │   │   ├── chat/               #     Multi-agent discussion (SSE streaming)
 │   │   ├── pbl/                #     Project-Based Learning endpoints
 │   │   └── ...                 #     quiz-grade, parse-pdf, web-search, transcription, etc.
 │   ├── classroom/[id]/         #   Classroom playback page
-│   └── page.tsx                #   Home page (generation input)
+│   └── page.tsx                #   Home page (single unified text input + PDF upload)
 │
 ├── lib/                        # Core business logic
 │   ├── generation/             #   Two-stage lesson generation pipeline
+│   │   └── outline-generator.ts #    Includes syllabusToOutlines() fast-path
 │   ├── orchestration/          #   LangGraph multi-agent orchestration (director graph)
 │   ├── playback/               #   Playback state machine (idle → playing → live)
 │   ├── action/                 #   Action execution engine (speech, whiteboard, effects)
 │   ├── ai/                     #   LLM provider abstraction
+│   ├── server/                 #   Server-side config (platform-config.ts — feature flags)
 │   ├── api/                    #   Stage API facade (slide/canvas/scene manipulation)
-│   ├── store/                  #   Zustand state stores
-│   ├── types/                  #   Centralized TypeScript type definitions
+│   ├── store/                  #   Zustand state stores (incl. syllabus.ts with localStorage)
+│   ├── types/                  #   Centralized TypeScript type definitions (incl. syllabus.ts)
 │   ├── audio/                  #   TTS & ASR providers
 │   ├── media/                  #   Image & video generation providers
 │   ├── export/                 #   PPTX & HTML export
@@ -430,7 +419,7 @@ OpenMAIC/
 │   ├── scene-renderers/        #   Quiz, Interactive, PBL scene renderers
 │   ├── generation/             #   Lesson generation toolbar & progress
 │   ├── chat/                   #   Chat area & session management
-│   ├── settings/               #   Settings panel (providers, TTS, ASR, media …)
+│   ├── syllabus/               #   Syllabus editor (Overview/Modules/Assessment tabs, AI Refine sidebar)
 │   ├── whiteboard/             #   SVG-based whiteboard drawing
 │   ├── agent/                  #   Agent avatar, config, info bar
 │   ├── ui/                     #   Base UI primitives (shadcn/ui + Radix)
@@ -445,16 +434,24 @@ OpenMAIC/
 │       ├── SKILL.md            #   Thin router with confirmation rules
 │       └── references/         #   On-demand SOP sections
 │
-├── configs/                    # Shared constants (shapes, fonts, hotkeys, themes …)
+├── configs/                    # Shared constants
+│   ├── slide-layouts.ts        #   12 named slide layout definitions
+│   ├── theme.ts                #   Preset themes (5 ASU-branded: Light, Warm, Dark, Gold, Slate)
+│   └── ...                     #   shapes, fonts, hotkeys, animations
+│
+├── docs/                       # Design & brand documentation
+│   └── asu-brand-analysis.md   #   ASU brand color, font, and layout guidance
 └── public/                     # Static assets (logos, avatars)
 ```
 
 ### Key Architecture
 
-- **Generation Pipeline** (`lib/generation/`) — Two-stage: outline generation → scene content generation
+- **Generation Pipeline** (`lib/generation/`) — Syllabus-first: topic → syllabus review → outline generation → scene content generation
+- **Platform Config** (`lib/server/platform-config.ts`) — Server-side feature flags; features auto-enable based on env var presence
 - **Multi-Agent Orchestration** (`lib/orchestration/`) — LangGraph state machine managing agent turns and discussions
 - **Playback Engine** (`lib/playback/`) — State machine driving classroom playback and live interaction
 - **Action Engine** (`lib/action/`) — Executes 28+ action types (speech, whiteboard draw/text/shape/chart, spotlight, laser …)
+- **Slide Layout System** (`configs/slide-layouts.ts`) — 12 named layouts (title-centered, section-divider, content-image-right, key-concept, comparison, numbered-steps, quote-highlight, summary, etc.)
 
 ### How to Contribute
 
