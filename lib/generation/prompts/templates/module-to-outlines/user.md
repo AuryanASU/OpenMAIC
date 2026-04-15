@@ -1,4 +1,4 @@
-Please expand the following course module into 3-5 scene outlines.
+Please expand the following course module into **6-8 scene outlines** following the required pacing pattern.
 
 ---
 
@@ -46,28 +46,32 @@ Please expand the following course module into 3-5 scene outlines.
 
 ## Output Requirements
 
-Generate a JSON array of 3-5 SceneOutline objects for this module. Each scene must include:
+Generate a JSON array of **6-8** SceneOutline objects following this pacing pattern:
 
-```json
-{
-  "id": "scene_1",
-  "type": "slide" | "quiz" | "interactive" | "pbl" | "assignment",
-  "title": "Scene Title",
-  "description": "Teaching purpose description",
-  "keyPoints": ["Point 1", "Point 2", "Point 3"],
-  "teachingObjective": "Learning objective addressed",
-  "order": 1
-}
-```
+1. **Module intro slide** — objectives and overview
+2. **Lecture slide A** — first topic group (2-3 topics)
+3. **Lecture slide B** — second topic group
+4. **Formative quiz 1** — 5-8 questions covering lectures A+B (recall/comprehension)
+5. **Lecture C / Application slide** — remaining topics or worked examples
+6. **Activity scene** — interactive, PBL, or assignment (based on suggested scene types)
+7. **Comprehensive quiz 2** — 8-12 questions covering ALL module content (application/analysis)
+8. **Module summary slide** — recap + transition
 
-### Requirements
+### CRITICAL: Quiz Placement Rules
 
-1. **quiz scenes must include quizConfig** with difficulty set to "{{difficulty}}"
+- **NEVER place a quiz before at least 2 lecture slides**
+- Formative quiz 1 goes AFTER lectures A and B (position 4, not position 2 or 3)
+- Comprehensive quiz 2 goes near the end, AFTER the activity scene
+
+### Config Requirements
+
+1. **quiz scenes must include quizConfig**:
+   - Formative quiz: `{ questionCount: 5-8, difficulty: "{{difficulty}}", questionTypes: ["single", "multiple"] }`
+   - Comprehensive quiz: `{ questionCount: 8-12, difficulty: "{{difficulty}}", questionTypes: ["single", "multiple"] }` (add `"text"` for hard difficulty)
 2. **interactive scenes must include interactiveConfig**
 3. **pbl scenes must include pblConfig** (include `language: "{{language}}"`)
 4. **assignment scenes must include assignmentConfig**
-5. Start with a lecture slide introducing the module topic
-6. Include at least one assessment scene (quiz or assignment) if the module has 3+ topics
-7. Consider the suggested scene types when choosing scene types
-8. Align scenes with the assessment strategy when provided
-9. Output JSON array directly without additional explanatory text
+5. Split the module's topics across multiple lecture slides — do NOT put all topics in one slide
+6. Consider the suggested scene types when choosing the activity scene type
+7. Align scenes with the assessment strategy when provided
+8. Output JSON array directly without additional explanatory text

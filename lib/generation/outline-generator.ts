@@ -58,13 +58,54 @@ function getModuleDifficulty(
 // ── Deterministic module expansion ───────────────────────────────────────
 
 /**
- * Expand a single module into 2-4 SceneOutline objects deterministically.
+ * Helper: create a base outline with module context pre-filled.
+ */
+function makeOutline(
+  module: CourseModule,
+  moduleIndex: number,
+  language: 'zh-CN' | 'en-US',
+  overrides: Partial<SceneOutline> & Pick<SceneOutline, 'type' | 'title' | 'description' | 'keyPoints'>,
+): SceneOutline {
+  return {
+    id: nanoid(),
+    order: 0, // Placeholder — caller assigns final order
+    language,
+    moduleId: module.id,
+    moduleTitle: module.title,
+    moduleIndex,
+    ...overrides,
+  };
+}
+
+/**
+ * Split a module's topics into roughly equal chunks for progressive lectures.
+ * Returns 2-3 groups depending on topic count.
+ */
+function chunkTopics(topics: string[], targetChunks: number): string[][] {
+  if (topics.length <= 1) return [topics];
+  const size = Math.max(1, Math.ceil(topics.length / targetChunks));
+  const chunks: string[][] = [];
+  for (let i = 0; i < topics.length; i += size) {
+    chunks.push(topics.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/**
+ * Expand a single module into 6-8 SceneOutline objects deterministically.
  *
- * Rules:
- * - Always: 1 lecture slide
- * - If 2+ topics: 1 practice quiz
- * - If 3+ topics or sceneTypes includes interactive/pbl/assignment: 1 activity scene
- * - If 4+ topics: 1 module summary slide
+ * Pacing pattern (university-grade):
+ *   1. Module intro slide — objectives + overview
+ *   2. Lecture A — first topic group (deep dive)
+ *   3. Lecture B — second topic group (deep dive)
+ *   4. Formative quiz 1 — covers lectures A+B (spaced after 2 lectures)
+ *   5. Lecture C / Application slide — remaining topics or worked examples
+ *   6. Activity scene — interactive, PBL, or assignment (hands-on practice)
+ *   7. Formative quiz 2 — comprehensive module check (harder, includes short-answer for late modules)
+ *   8. Module summary slide — recap key takeaways + transition to next module
+ *
+ * Minimum output: 6 scenes (modules with 1-2 topics skip Lecture C)
+ * Maximum output: 8 scenes
  */
 function expandModuleDeterministic(
   module: CourseModule,
@@ -74,72 +115,147 @@ function expandModuleDeterministic(
 ): SceneOutline[] {
   const outlines: SceneOutline[] = [];
   const difficulty = getModuleDifficulty(moduleIndex, totalModules);
+  const isEn = language !== 'zh-CN';
+  const topicChunks = chunkTopics(module.topics, 3);
 
-  // 1. Lecture slide (always)
-  outlines.push({
-    id: nanoid(),
-    type: 'slide',
-    title: module.title,
-    description: module.description || `Cover key topics in ${module.title}`,
-    keyPoints: [...module.topics.slice(0, 5), ...module.learningObjectives.slice(0, 3)].slice(0, 6),
-    teachingObjective: module.learningObjectives[0],
-    order: 0, // Placeholder — caller assigns final order
-    language,
-    moduleId: module.id,
-    moduleTitle: module.title,
-    moduleIndex,
-  });
+  // ── 1. Module intro slide ──────────────────────────────────────────────
+  outlines.push(
+    makeOutline(module, moduleIndex, language, {
+      type: 'slide',
+      title: module.title,
+      description: isEn
+        ? `Introduce ${module.title}: learning objectives, key concepts, and what students will accomplish`
+        : `介绍${module.title}：学习目标、核心概念及学生将要完成的内容`,
+      keyPoints: [
+        ...module.learningObjectives.slice(0, 3),
+        ...module.topics.slice(0, 2),
+      ].slice(0, 5),
+      teachingObjective: module.learningObjectives[0],
+    }),
+  );
 
-  // 2. Practice quiz (if 2+ topics)
-  if (module.topics.length >= 2) {
-    outlines.push({
-      id: nanoid(),
-      type: 'quiz',
-      title:
-        language === 'zh-CN' ? `${module.title} - 知识检测` : `${module.title} - Knowledge Check`,
-      description:
-        language === 'zh-CN'
-          ? `检验对${module.title}核心概念的理解`
-          : `Test understanding of core concepts in ${module.title}`,
-      keyPoints: module.topics.slice(0, 4),
-      order: 0,
-      language,
-      moduleId: module.id,
-      moduleTitle: module.title,
-      moduleIndex,
-      quizConfig: {
-        questionCount: Math.min(5, Math.max(3, module.topics.length)),
-        difficulty,
-        questionTypes: ['single', 'multiple'],
-      },
-    });
+  // ── 2. Lecture A — first topic group ───────────────────────────────────
+  const chunkA = topicChunks[0] ?? module.topics.slice(0, 2);
+  outlines.push(
+    makeOutline(module, moduleIndex, language, {
+      type: 'slide',
+      title: isEn
+        ? `${module.title} — ${chunkA[0] ?? 'Core Concepts'}`
+        : `${module.title} — ${chunkA[0] ?? '核心概念'}`,
+      description: isEn
+        ? `Deep dive into ${chunkA.join(', ')} with examples and explanations`
+        : `深入讲解${chunkA.join('、')}，包含示例和解释`,
+      keyPoints: chunkA.slice(0, 5),
+      teachingObjective: module.learningObjectives[0],
+    }),
+  );
+
+  // ── 3. Lecture B — second topic group (always present for proper pacing) ─
+  const chunkB = topicChunks[1] ?? [];
+  if (chunkB.length > 0) {
+    outlines.push(
+      makeOutline(module, moduleIndex, language, {
+        type: 'slide',
+        title: isEn
+          ? `${module.title} — ${chunkB[0] ?? 'Applications'}`
+          : `${module.title} — ${chunkB[0] ?? '应用'}`,
+        description: isEn
+          ? `Continue exploring ${chunkB.join(', ')} — building on foundational concepts`
+          : `继续探索${chunkB.join('、')} — 在基础概念上构建`,
+        keyPoints: chunkB.slice(0, 5),
+        teachingObjective: module.learningObjectives[1] ?? module.learningObjectives[0],
+      }),
+    );
+  } else {
+    // Even with 1 topic, ensure 2 lectures before any quiz (pacing rule)
+    outlines.push(
+      makeOutline(module, moduleIndex, language, {
+        type: 'slide',
+        title: isEn
+          ? `${module.title} — Key Concepts & Terminology`
+          : `${module.title} — 关键概念与术语`,
+        description: isEn
+          ? `Explore the foundational terminology, frameworks, and mental models for ${module.title}`
+          : `探索${module.title}的基础术语、框架和思维模型`,
+        keyPoints: module.learningObjectives.slice(0, 4),
+        teachingObjective: module.learningObjectives[1] ?? module.learningObjectives[0],
+      }),
+    );
   }
 
-  // 3. Activity scene (if 3+ topics or sceneTypes includes interactive/pbl/assignment)
+  // ── 4. Formative quiz 1 — after 2 lectures (properly spaced) ──────────
+  outlines.push(
+    makeOutline(module, moduleIndex, language, {
+      type: 'quiz',
+      title: isEn
+        ? `${module.title} — Check Your Understanding`
+        : `${module.title} — 理解检测`,
+      description: isEn
+        ? `Formative assessment covering the concepts from the first two lectures. Tests recall and basic comprehension.`
+        : `形成性评估，涵盖前两次课程的概念。测试记忆和基本理解。`,
+      keyPoints: [...chunkA.slice(0, 2), ...(chunkB.length > 0 ? chunkB.slice(0, 2) : [])].slice(0, 4),
+      quizConfig: {
+        questionCount: Math.min(8, Math.max(5, module.topics.length + 2)),
+        difficulty: difficulty === 'hard' ? 'medium' : difficulty,
+        questionTypes: ['single', 'multiple'],
+      },
+    }),
+  );
+
+  // ── 5. Lecture C / Application slide — remaining topics or worked examples ──
+  const chunkC = topicChunks[2];
+  if (chunkC && chunkC.length > 0) {
+    outlines.push(
+      makeOutline(module, moduleIndex, language, {
+        type: 'slide',
+        title: isEn
+          ? `${module.title} — ${chunkC[0] ?? 'Advanced Topics'}`
+          : `${module.title} — ${chunkC[0] ?? '进阶主题'}`,
+        description: isEn
+          ? `Explore ${chunkC.join(', ')} — connecting concepts to real-world applications`
+          : `探索${chunkC.join('、')} — 将概念与实际应用相结合`,
+        keyPoints: chunkC.slice(0, 5),
+        teachingObjective: module.learningObjectives[2] ?? module.learningObjectives[0],
+      }),
+    );
+  } else {
+    // No third topic chunk — add a worked-example / application slide instead
+    outlines.push(
+      makeOutline(module, moduleIndex, language, {
+        type: 'slide',
+        title: isEn
+          ? `${module.title} — Practical Applications`
+          : `${module.title} — 实际应用`,
+        description: isEn
+          ? `Apply the concepts from ${module.title} to real-world scenarios through worked examples and case studies`
+          : `通过案例和实例将${module.title}的概念应用于实际场景`,
+        keyPoints: module.topics.slice(0, 3).map((t) =>
+          isEn ? `Apply ${t} in practice` : `在实践中应用${t}`,
+        ),
+        teachingObjective: module.learningObjectives[1] ?? module.learningObjectives[0],
+      }),
+    );
+  }
+
+  // ── 6. Activity scene — hands-on practice ─────────────────────────────
   const hasActivityType = module.sceneTypes?.some((t) =>
     ['interactive', 'pbl', 'assignment'].includes(t),
   );
-  if (module.topics.length >= 3 || hasActivityType) {
+  if (hasActivityType || module.topics.length >= 2) {
     const activityType = pickSceneType(
       module.sceneTypes?.filter((t) => ['interactive', 'pbl', 'assignment'].includes(t)),
     );
 
-    const activity: SceneOutline = {
-      id: nanoid(),
+    const activity = makeOutline(module, moduleIndex, language, {
       type: activityType,
-      title:
-        language === 'zh-CN' ? `${module.title} - 实践活动` : `${module.title} - Practice Activity`,
-      description:
-        language === 'zh-CN'
-          ? `通过实践活动加深对${module.title}的理解`
-          : `Deepen understanding of ${module.title} through hands-on practice`,
+      title: isEn
+        ? `${module.title} — Hands-On Practice`
+        : `${module.title} — 动手实践`,
+      description: isEn
+        ? `Apply what you've learned about ${module.title} through interactive practice`
+        : `通过互动实践应用你所学的${module.title}知识`,
       keyPoints: module.topics.slice(0, 4),
-      order: 0,
-      language,
-      moduleId: module.id,
-      moduleTitle: module.title,
-      moduleIndex,
-    };
+    });
 
     // Attach type-specific configs
     if (activityType === 'interactive') {
@@ -168,24 +284,41 @@ function expandModuleDeterministic(
     outlines.push(activity);
   }
 
-  // 4. Module summary slide (if 4+ topics)
-  if (module.topics.length >= 4) {
-    outlines.push({
-      id: nanoid(),
+  // ── 7. Formative quiz 2 — comprehensive module assessment ─────────────
+  const quiz2QuestionTypes: ('single' | 'multiple' | 'text')[] =
+    difficulty === 'hard' ? ['single', 'multiple', 'text'] : ['single', 'multiple'];
+
+  outlines.push(
+    makeOutline(module, moduleIndex, language, {
+      type: 'quiz',
+      title: isEn
+        ? `${module.title} — Module Assessment`
+        : `${module.title} — 模块评估`,
+      description: isEn
+        ? `Comprehensive assessment covering all concepts in ${module.title}. Tests application and analysis.`
+        : `综合评估，涵盖${module.title}的所有概念。测试应用和分析能力。`,
+      keyPoints: module.topics.slice(0, 6),
+      quizConfig: {
+        questionCount: Math.min(12, Math.max(8, module.topics.length * 2)),
+        difficulty,
+        questionTypes: quiz2QuestionTypes,
+      },
+    }),
+  );
+
+  // ── 8. Module summary slide ────────────────────────────────────────────
+  outlines.push(
+    makeOutline(module, moduleIndex, language, {
       type: 'slide',
-      title: language === 'zh-CN' ? `${module.title} - 总结` : `${module.title} - Summary`,
-      description:
-        language === 'zh-CN'
-          ? `回顾${module.title}的关键要点`
-          : `Recap the key takeaways from ${module.title}`,
+      title: isEn
+        ? `${module.title} — Summary & Next Steps`
+        : `${module.title} — 总结与下一步`,
+      description: isEn
+        ? `Recap key takeaways from ${module.title}, review learning outcomes achieved, and preview what's coming next`
+        : `回顾${module.title}的关键要点，检查学习目标达成情况，预览下一步内容`,
       keyPoints: module.learningObjectives.slice(0, 4),
-      order: 0,
-      language,
-      moduleId: module.id,
-      moduleTitle: module.title,
-      moduleIndex,
-    });
-  }
+    }),
+  );
 
   return outlines;
 }
