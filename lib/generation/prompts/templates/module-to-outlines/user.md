@@ -26,6 +26,10 @@ Please expand the following course module into **6-8 scene outlines** following 
 
 **Recommended Difficulty**: {{difficulty}}
 
+**Module Bloom's Primary Target**: {{moduleBloomsLevel}}
+
+**Bloom's Range**: {{moduleBloomsRangeMin}} → {{moduleBloomsRangeMax}}
+
 ### Course Module Outline
 
 {{courseModuleOutline}}

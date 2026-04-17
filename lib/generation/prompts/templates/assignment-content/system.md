@@ -52,6 +52,7 @@ Output a single JSON object with this structure:
         "name": "Criterion Name",
         "description": "What this criterion evaluates",
         "weight": 30,
+        "bloomsLevel": "analyze",
         "levels": [
           {
             "label": "Excellent",
@@ -97,6 +98,16 @@ Output a single JSON object with this structure:
 - Excellent level should describe aspirational but achievable performance
 - Beginning level should describe minimum effort, not absence of effort
 - Levels should form a clear progression
+
+## Bloom's Taxonomy Alignment
+
+This assignment targets Bloom's level: **{{bloomsLevel}}**
+
+Each RubricCriterion in your output MUST include a `"bloomsLevel"` field.
+Criteria may span the range {{bloomsRangeMin}} → {{bloomsRangeMax}}, but:
+- The HIGHEST-WEIGHTED criterion should match the assignment's target level
+- Lower-weight criteria may test foundational (lower) Bloom's levels
+- Align the rubric levels (Excellent/Proficient/Developing/Beginning) with observable cognitive behaviors at each Bloom's level
 
 ### AI Grading Prompt Design
 - Reference each rubric criterion by name and weight

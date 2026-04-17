@@ -45,6 +45,13 @@ import type {
   GenerationResult,
   GenerationCallbacks,
 } from './pipeline-types';
+import {
+  BLOOMS_VERBS,
+  coerceBloomsLevel,
+  inferBloomsLevelFromVerb,
+  inRange,
+} from '@/lib/types/blooms';
+import type { BloomsLevel, BloomsRange } from '@/lib/types/blooms';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
@@ -553,6 +560,7 @@ async function generateSlideContent(
     canvas_height: canvasHeight,
     teacherContext,
     syllabusContext: syllabusContext || '',
+    bloomsLevel: outline.bloomsLevel || '',
   });
 
   if (!prompts) {
@@ -646,8 +654,28 @@ async function generateQuizContent(
   const quizConfig = outline.quizConfig || {
     questionCount: 3,
     difficulty: 'medium',
-    questionTypes: ['single'],
+    questionTypes: ['single'] as ('single' | 'multiple' | 'text')[],
   };
+
+  // Resolve Bloom's range for this quiz with sensible defaults
+  const bloomsRange: BloomsRange =
+    quizConfig.bloomsRange ??
+    (outline.bloomsLevel
+      ? { min: outline.bloomsLevel, max: outline.bloomsLevel }
+      : { min: 'apply', max: 'apply' });
+
+  // Build a compact verb hint string for the prompt: one line per level in range
+  const levelsInRange: BloomsLevel[] = [
+    'remember',
+    'understand',
+    'apply',
+    'analyze',
+    'evaluate',
+    'create',
+  ].filter((l): l is BloomsLevel => inRange(l as BloomsLevel, bloomsRange));
+  const bloomsVerbsList = levelsInRange
+    .map((level) => `- ${level}: ${BLOOMS_VERBS[level].slice(0, 8).join(', ')}`)
+    .join('\n');
 
   const prompts = buildPrompt(PROMPT_IDS.QUIZ_CONTENT, {
     title: outline.title,
@@ -657,6 +685,9 @@ async function generateQuizContent(
     difficulty: quizConfig.difficulty,
     questionTypes: quizConfig.questionTypes.join(', '),
     syllabusContext: syllabusContext || '',
+    bloomsRangeMin: bloomsRange.min,
+    bloomsRangeMax: bloomsRange.max,
+    bloomsVerbsList,
   });
 
   if (!prompts) {
@@ -674,15 +705,36 @@ async function generateQuizContent(
 
   log.debug(`Got ${generatedQuestions.length} questions for: ${outline.title}`);
 
-  // Ensure each question has an ID and normalize options format
+  // Ensure each question has an ID, normalize options, validate + preserve Bloom's metadata
   const questions: QuizQuestion[] = generatedQuestions.map((q) => {
     const isText = q.type === 'short_answer';
+    const rawQ = q as unknown as Record<string, unknown>;
+
+    // Resolve Bloom's level: AI output → infer from verb → fall back to range min
+    let bloomsLevel = coerceBloomsLevel(rawQ.bloomsLevel);
+    const bloomsVerb = typeof rawQ.bloomsVerb === 'string' ? rawQ.bloomsVerb : undefined;
+    if (!bloomsLevel && bloomsVerb) {
+      bloomsLevel = inferBloomsLevelFromVerb(bloomsVerb);
+    }
+    if (!bloomsLevel) {
+      bloomsLevel = bloomsRange.min;
+    }
+
+    // Log (but don't drop) questions that land outside the configured range
+    if (!inRange(bloomsLevel, bloomsRange)) {
+      log.warn(
+        `Quiz "${outline.title}" question ${q.id ?? '?'} has bloomsLevel=${bloomsLevel} outside range ${bloomsRange.min}-${bloomsRange.max}`,
+      );
+    }
+
     return {
       ...q,
       id: q.id || `q_${nanoid(8)}`,
       options: isText ? undefined : normalizeQuizOptions(q.options),
-      answer: isText ? undefined : normalizeQuizAnswer(q as unknown as Record<string, unknown>),
+      answer: isText ? undefined : normalizeQuizAnswer(rawQ),
       hasAnswer: isText ? false : true,
+      bloomsLevel,
+      ...(bloomsVerb ? { bloomsVerb } : {}),
     };
   });
 
@@ -890,6 +942,13 @@ async function generateAssignmentContent(
     rubricFocus: outline.keyPoints || [],
   };
 
+  // Resolve Bloom's level + range for assignment context
+  const bloomsLevel: BloomsLevel = outline.bloomsLevel ?? 'apply';
+  const bloomsRange: BloomsRange = outline.quizConfig?.bloomsRange ?? {
+    min: bloomsLevel,
+    max: bloomsLevel,
+  };
+
   const prompts = buildPrompt(PROMPT_IDS.ASSIGNMENT_CONTENT, {
     title: outline.title,
     description: outline.description,
@@ -899,6 +958,9 @@ async function generateAssignmentContent(
     rubricFocus: (assignmentConfig.rubricFocus || []).join(', '),
     syllabusContext: syllabusContext || '',
     language: outline.language || 'en-US',
+    bloomsLevel,
+    bloomsRangeMin: bloomsRange.min,
+    bloomsRangeMax: bloomsRange.max,
   });
 
   if (!prompts) {
@@ -935,8 +997,13 @@ async function generateAssignmentContent(
     }
   }
 
-  // Validate each criterion has ordered levels
+  // Validate each criterion has ordered levels + coerce Bloom's level
   for (const criterion of criteria) {
+    // Coerce AI-supplied bloomsLevel; default to the assignment's target if missing
+    const rawCriterion = criterion as unknown as Record<string, unknown>;
+    const coerced = coerceBloomsLevel(rawCriterion.bloomsLevel);
+    criterion.bloomsLevel = coerced ?? bloomsLevel;
+
     if (!Array.isArray(criterion.levels) || criterion.levels.length === 0) {
       log.warn(`Criterion "${criterion.name}" has no levels, skipping validation`);
       continue;
@@ -1380,6 +1447,7 @@ export function createSceneWithActions(
       ...(outline.moduleId !== undefined && { moduleId: outline.moduleId }),
       ...(outline.moduleTitle !== undefined && { moduleTitle: outline.moduleTitle }),
       ...(outline.moduleIndex !== undefined && { moduleIndex: outline.moduleIndex }),
+      ...(outline.bloomsLevel !== undefined && { bloomsLevel: outline.bloomsLevel }),
     };
 
     const sceneResult = api.scene.create({

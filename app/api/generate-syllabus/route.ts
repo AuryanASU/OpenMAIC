@@ -15,6 +15,8 @@ import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
 import { nanoid } from 'nanoid';
 import type { GenerateSyllabusRequest, CourseSyllabus } from '@/lib/types/syllabus';
+import type { BloomsLevel } from '@/lib/types/blooms';
+import { DEPTH_TO_BLOOMS_RANGE, coerceBloomsLevel, coerceBloomsRange } from '@/lib/types/blooms';
 import { jsonrepair } from 'jsonrepair';
 
 const log = createLogger('GenerateSyllabus API');
@@ -30,6 +32,7 @@ function buildSyllabusPrompt(req: GenerateSyllabusRequest): { system: string; us
   const depth = req.depth ?? 'introductory';
   const duration = req.duration ?? '8 weeks';
   const audience = req.targetAudience ?? 'undergraduate students';
+  const courseRange = DEPTH_TO_BLOOMS_RANGE[depth];
 
   const system = `You are an expert instructional designer at Arizona State University with deep knowledge of curriculum design, Bloom's taxonomy, and evidence-based pedagogy. You create rigorous, well-structured university course syllabi.
 
@@ -39,6 +42,25 @@ Your syllabi always:
 - Include diverse assessment strategies appropriate for the level
 - Have clear alignment between outcomes, objectives, modules, and assessments
 - Are specific to the topic, not generic templates
+
+CRITICAL: Bloom's Taxonomy Tagging
+
+Every learning outcome, learning objective, module, and assessment component MUST be tagged with a specific Bloom's taxonomy level, chosen from:
+- "remember" (recall, identify, list)
+- "understand" (explain, summarize, classify)
+- "apply" (use, demonstrate, solve)
+- "analyze" (differentiate, examine, contrast)
+- "evaluate" (critique, judge, justify)
+- "create" (design, compose, generate)
+
+This course targets the Bloom's range: ${courseRange.min} through ${courseRange.max}.
+
+Scaffold module Bloom's levels progressively:
+- First 25% of modules: focus on lower levels (foundational)
+- Middle 50% of modules: build toward the course's primary cognitive target
+- Final 25% of modules: push to the upper end of the course range
+
+Every learning outcome verb must be from the canonical Bloom's verb list for its tagged level.
 
 Return ONLY valid JSON matching the exact schema below. No markdown fences, no commentary.`;
 
@@ -57,35 +79,48 @@ Return a JSON object with EXACTLY this structure:
   "courseCode": "Optional — e.g. CIS 235 (omit if not applicable)",
   "credits": 3,
   "description": "2-3 paragraph course overview explaining what the course covers, why it matters, and how students will learn",
+  "bloomsRange": { "min": "${courseRange.min}", "max": "${courseRange.max}" },
   "learningOutcomes": [
     "Students will be able to... (use Bloom's taxonomy verbs — 4-8 outcomes)"
   ],
+  "learningOutcomesBloom": ["apply", "understand"],
   "learningObjectives": [
     "Specific, measurable objective 1",
     "Specific, measurable objective 2"
   ],
+  "learningObjectivesBloom": ["remember", "understand"],
   "modules": [
     {
       "order": 1,
       "title": "Module 1: <descriptive title>",
       "description": "What this module covers and why it matters",
       "topics": ["Key topic 1", "Key topic 2", "Key topic 3"],
+      "bloomsLevel": "understand",
       "learningObjectives": ["By the end of this module, students will..."],
+      "learningObjectivesBloom": ["remember", "understand"],
       "estimatedWeeks": 1,
       "sceneTypes": ["slide", "quiz"]
     }
   ],
   "assessmentStrategy": {
     "components": [
-      { "name": "Participation & Quizzes", "weight": 20, "description": "In-class quizzes and participation" },
-      { "name": "Assignments", "weight": 40, "description": "Weekly hands-on assignments" },
-      { "name": "Final Project", "weight": 40, "description": "Capstone project demonstrating course mastery" }
+      { "name": "Participation & Quizzes", "weight": 20, "description": "In-class quizzes and participation", "bloomsLevel": "understand" },
+      { "name": "Assignments", "weight": 40, "description": "Weekly hands-on assignments", "bloomsLevel": "apply" },
+      { "name": "Final Project", "weight": 40, "description": "Capstone project demonstrating course mastery", "bloomsLevel": "${courseRange.max}" }
     ]
   },
   "estimatedDuration": "${duration}",
   "targetAudience": "${audience}",
   "prerequisites": ["Any prerequisite course or skill (omit array if none)"]
 }
+
+Bloom's Tagging Rules:
+- "bloomsRange" at the top level must use the course's target range (${courseRange.min} → ${courseRange.max})
+- "learningOutcomesBloom" MUST be a parallel array with the SAME length as "learningOutcomes"
+- "learningObjectivesBloom" MUST be a parallel array with the SAME length as "learningObjectives"
+- Each module's "bloomsLevel" is its primary cognitive target, and must fall within the course range
+- Each module's "learningObjectivesBloom" MUST be a parallel array with the SAME length as that module's "learningObjectives"
+- Assessment components' "bloomsLevel" should reflect what the assessment measures (higher-stakes work targets higher levels)
 
 Guidelines:
 - sceneTypes for each module should reflect the best pedagogy: use "quiz" for knowledge-check modules, "interactive" for concept visualization, "pbl" for project/case-study modules, "slide" for lecture content
@@ -169,6 +204,44 @@ export async function POST(req: NextRequest) {
             return;
           }
 
+          // Validate + coerce Bloom's fields from AI output
+          const depthForBloom = body.depth ?? 'introductory';
+          const fallbackRange = DEPTH_TO_BLOOMS_RANGE[depthForBloom];
+          const topLevelBloomsRange = coerceBloomsRange(syllabusData.bloomsRange) ?? fallbackRange;
+
+          // Helper: validate parallel Bloom's array against a text array
+          const coerceParallelBlooms = (
+            levels: unknown,
+            texts: unknown[] | undefined,
+          ): BloomsLevel[] | undefined => {
+            if (!Array.isArray(levels) || !Array.isArray(texts)) return undefined;
+            if (levels.length !== texts.length) return undefined;
+            const coerced = levels.map((v) => coerceBloomsLevel(v));
+            if (coerced.some((x) => x === undefined)) return undefined;
+            return coerced as BloomsLevel[];
+          };
+
+          const learningOutcomes = syllabusData.learningOutcomes ?? [];
+          const learningObjectives = syllabusData.learningObjectives ?? [];
+          const learningOutcomesBloom = coerceParallelBlooms(
+            (syllabusData as { learningOutcomesBloom?: unknown }).learningOutcomesBloom,
+            learningOutcomes,
+          );
+          const learningObjectivesBloom = coerceParallelBlooms(
+            (syllabusData as { learningObjectivesBloom?: unknown }).learningObjectivesBloom,
+            learningObjectives,
+          );
+
+          // Coerce assessment components' Bloom's levels
+          const assessmentStrategy = syllabusData.assessmentStrategy
+            ? {
+                components: (syllabusData.assessmentStrategy.components ?? []).map((c) => ({
+                  ...c,
+                  bloomsLevel: coerceBloomsLevel((c as { bloomsLevel?: unknown }).bloomsLevel),
+                })),
+              }
+            : undefined;
+
           // Enrich with metadata
           const now = new Date().toISOString();
           const syllabus: CourseSyllabus = {
@@ -177,19 +250,30 @@ export async function POST(req: NextRequest) {
             courseCode: syllabusData.courseCode,
             credits: syllabusData.credits,
             description: syllabusData.description ?? '',
-            learningOutcomes: syllabusData.learningOutcomes ?? [],
-            learningObjectives: syllabusData.learningObjectives ?? [],
-            modules: (syllabusData.modules ?? []).map((m, i) => ({
-              id: nanoid(),
-              order: m.order ?? i + 1,
-              title: m.title ?? `Module ${i + 1}`,
-              description: m.description ?? '',
-              topics: m.topics ?? [],
-              learningObjectives: m.learningObjectives ?? [],
-              estimatedWeeks: m.estimatedWeeks,
-              sceneTypes: m.sceneTypes,
-            })),
-            assessmentStrategy: syllabusData.assessmentStrategy,
+            learningOutcomes,
+            learningObjectives,
+            learningOutcomesBloom,
+            learningObjectivesBloom,
+            bloomsRange: topLevelBloomsRange,
+            modules: (syllabusData.modules ?? []).map((m, i) => {
+              const moduleObjectives = m.learningObjectives ?? [];
+              return {
+                id: nanoid(),
+                order: m.order ?? i + 1,
+                title: m.title ?? `Module ${i + 1}`,
+                description: m.description ?? '',
+                topics: m.topics ?? [],
+                learningObjectives: moduleObjectives,
+                learningObjectivesBloom: coerceParallelBlooms(
+                  (m as { learningObjectivesBloom?: unknown }).learningObjectivesBloom,
+                  moduleObjectives,
+                ),
+                bloomsLevel: coerceBloomsLevel((m as { bloomsLevel?: unknown }).bloomsLevel),
+                estimatedWeeks: m.estimatedWeeks,
+                sceneTypes: m.sceneTypes,
+              };
+            }),
+            assessmentStrategy,
             estimatedDuration: syllabusData.estimatedDuration ?? body.duration,
             targetAudience: syllabusData.targetAudience ?? body.targetAudience,
             prerequisites: syllabusData.prerequisites,

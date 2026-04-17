@@ -12,6 +12,15 @@ import type {
   ImageMapping,
 } from '@/lib/types/generation';
 import type { CourseSyllabus, CourseModule } from '@/lib/types/syllabus';
+import {
+  getModuleBloomsLevel,
+  getModuleBloomsRange,
+  splitQuizRanges,
+  coerceBloomsLevel,
+  coerceBloomsRange,
+  BLOOMS_VERBS,
+} from '@/lib/types/blooms';
+import type { BloomsLevel, BloomsRange } from '@/lib/types/blooms';
 import { buildPrompt, PROMPT_IDS } from './prompts';
 import { formatImageDescription, formatImagePlaceholder } from './prompt-formatters';
 import { parseJsonResponse } from './json-repair';
@@ -64,7 +73,8 @@ function makeOutline(
   module: CourseModule,
   moduleIndex: number,
   language: 'zh-CN' | 'en-US',
-  overrides: Partial<SceneOutline> & Pick<SceneOutline, 'type' | 'title' | 'description' | 'keyPoints'>,
+  overrides: Partial<SceneOutline> &
+    Pick<SceneOutline, 'type' | 'title' | 'description' | 'keyPoints'>,
 ): SceneOutline {
   return {
     id: nanoid(),
@@ -112,13 +122,20 @@ function expandModuleDeterministic(
   moduleIndex: number,
   totalModules: number,
   language: 'zh-CN' | 'en-US',
+  courseRange?: BloomsRange,
 ): SceneOutline[] {
   const outlines: SceneOutline[] = [];
   const difficulty = getModuleDifficulty(moduleIndex, totalModules);
   const isEn = language !== 'zh-CN';
   const topicChunks = chunkTopics(module.topics, 3);
 
-  // ── 1. Module intro slide ──────────────────────────────────────────────
+  // ── Bloom's targeting for this module ──────────────────────────────────
+  const moduleLevel: BloomsLevel =
+    module.bloomsLevel ?? getModuleBloomsLevel(moduleIndex, totalModules, courseRange);
+  const moduleRange: BloomsRange = getModuleBloomsRange(moduleIndex, totalModules, courseRange);
+  const { formative, comprehensive } = splitQuizRanges(moduleRange);
+
+  // ── 1. Module intro slide (lower end — introducing concepts) ──────────
   outlines.push(
     makeOutline(module, moduleIndex, language, {
       type: 'slide',
@@ -126,15 +143,16 @@ function expandModuleDeterministic(
       description: isEn
         ? `Introduce ${module.title}: learning objectives, key concepts, and what students will accomplish`
         : `介绍${module.title}：学习目标、核心概念及学生将要完成的内容`,
-      keyPoints: [
-        ...module.learningObjectives.slice(0, 3),
-        ...module.topics.slice(0, 2),
-      ].slice(0, 5),
+      keyPoints: [...module.learningObjectives.slice(0, 3), ...module.topics.slice(0, 2)].slice(
+        0,
+        5,
+      ),
       teachingObjective: module.learningObjectives[0],
+      bloomsLevel: moduleRange.min,
     }),
   );
 
-  // ── 2. Lecture A — first topic group ───────────────────────────────────
+  // ── 2. Lecture A — first topic group (lower end — foundational) ───────
   const chunkA = topicChunks[0] ?? module.topics.slice(0, 2);
   outlines.push(
     makeOutline(module, moduleIndex, language, {
@@ -147,10 +165,11 @@ function expandModuleDeterministic(
         : `深入讲解${chunkA.join('、')}，包含示例和解释`,
       keyPoints: chunkA.slice(0, 5),
       teachingObjective: module.learningObjectives[0],
+      bloomsLevel: moduleRange.min,
     }),
   );
 
-  // ── 3. Lecture B — second topic group (always present for proper pacing) ─
+  // ── 3. Lecture B — second topic group (module target level) ───────────
   const chunkB = topicChunks[1] ?? [];
   if (chunkB.length > 0) {
     outlines.push(
@@ -164,6 +183,7 @@ function expandModuleDeterministic(
           : `继续探索${chunkB.join('、')} — 在基础概念上构建`,
         keyPoints: chunkB.slice(0, 5),
         teachingObjective: module.learningObjectives[1] ?? module.learningObjectives[0],
+        bloomsLevel: moduleLevel,
       }),
     );
   } else {
@@ -179,30 +199,34 @@ function expandModuleDeterministic(
           : `探索${module.title}的基础术语、框架和思维模型`,
         keyPoints: module.learningObjectives.slice(0, 4),
         teachingObjective: module.learningObjectives[1] ?? module.learningObjectives[0],
+        bloomsLevel: moduleLevel,
       }),
     );
   }
 
-  // ── 4. Formative quiz 1 — after 2 lectures (properly spaced) ──────────
+  // ── 4. Formative quiz 1 — tests lower half of module range ───────────
   outlines.push(
     makeOutline(module, moduleIndex, language, {
       type: 'quiz',
-      title: isEn
-        ? `${module.title} — Check Your Understanding`
-        : `${module.title} — 理解检测`,
+      title: isEn ? `${module.title} — Check Your Understanding` : `${module.title} — 理解检测`,
       description: isEn
         ? `Formative assessment covering the concepts from the first two lectures. Tests recall and basic comprehension.`
         : `形成性评估，涵盖前两次课程的概念。测试记忆和基本理解。`,
-      keyPoints: [...chunkA.slice(0, 2), ...(chunkB.length > 0 ? chunkB.slice(0, 2) : [])].slice(0, 4),
+      keyPoints: [...chunkA.slice(0, 2), ...(chunkB.length > 0 ? chunkB.slice(0, 2) : [])].slice(
+        0,
+        4,
+      ),
+      bloomsLevel: formative.max,
       quizConfig: {
         questionCount: Math.min(8, Math.max(5, module.topics.length + 2)),
         difficulty: difficulty === 'hard' ? 'medium' : difficulty,
         questionTypes: ['single', 'multiple'],
+        bloomsRange: formative,
       },
     }),
   );
 
-  // ── 5. Lecture C / Application slide — remaining topics or worked examples ──
+  // ── 5. Lecture C / Application slide (module target level) ────────────
   const chunkC = topicChunks[2];
   if (chunkC && chunkC.length > 0) {
     outlines.push(
@@ -216,6 +240,7 @@ function expandModuleDeterministic(
           : `探索${chunkC.join('、')} — 将概念与实际应用相结合`,
         keyPoints: chunkC.slice(0, 5),
         teachingObjective: module.learningObjectives[2] ?? module.learningObjectives[0],
+        bloomsLevel: moduleLevel,
       }),
     );
   } else {
@@ -223,21 +248,20 @@ function expandModuleDeterministic(
     outlines.push(
       makeOutline(module, moduleIndex, language, {
         type: 'slide',
-        title: isEn
-          ? `${module.title} — Practical Applications`
-          : `${module.title} — 实际应用`,
+        title: isEn ? `${module.title} — Practical Applications` : `${module.title} — 实际应用`,
         description: isEn
           ? `Apply the concepts from ${module.title} to real-world scenarios through worked examples and case studies`
           : `通过案例和实例将${module.title}的概念应用于实际场景`,
-        keyPoints: module.topics.slice(0, 3).map((t) =>
-          isEn ? `Apply ${t} in practice` : `在实践中应用${t}`,
-        ),
+        keyPoints: module.topics
+          .slice(0, 3)
+          .map((t) => (isEn ? `Apply ${t} in practice` : `在实践中应用${t}`)),
         teachingObjective: module.learningObjectives[1] ?? module.learningObjectives[0],
+        bloomsLevel: moduleLevel,
       }),
     );
   }
 
-  // ── 6. Activity scene — hands-on practice ─────────────────────────────
+  // ── 6. Activity scene — hands-on practice (upper end) ─────────────────
   const hasActivityType = module.sceneTypes?.some((t) =>
     ['interactive', 'pbl', 'assignment'].includes(t),
   );
@@ -248,13 +272,12 @@ function expandModuleDeterministic(
 
     const activity = makeOutline(module, moduleIndex, language, {
       type: activityType,
-      title: isEn
-        ? `${module.title} — Hands-On Practice`
-        : `${module.title} — 动手实践`,
+      title: isEn ? `${module.title} — Hands-On Practice` : `${module.title} — 动手实践`,
       description: isEn
         ? `Apply what you've learned about ${module.title} through interactive practice`
         : `通过互动实践应用你所学的${module.title}知识`,
       keyPoints: module.topics.slice(0, 4),
+      bloomsLevel: moduleRange.max,
     });
 
     // Attach type-specific configs
@@ -284,39 +307,38 @@ function expandModuleDeterministic(
     outlines.push(activity);
   }
 
-  // ── 7. Formative quiz 2 — comprehensive module assessment ─────────────
+  // ── 7. Comprehensive quiz 2 — covers full module range ────────────────
   const quiz2QuestionTypes: ('single' | 'multiple' | 'text')[] =
     difficulty === 'hard' ? ['single', 'multiple', 'text'] : ['single', 'multiple'];
 
   outlines.push(
     makeOutline(module, moduleIndex, language, {
       type: 'quiz',
-      title: isEn
-        ? `${module.title} — Module Assessment`
-        : `${module.title} — 模块评估`,
+      title: isEn ? `${module.title} — Module Assessment` : `${module.title} — 模块评估`,
       description: isEn
         ? `Comprehensive assessment covering all concepts in ${module.title}. Tests application and analysis.`
         : `综合评估，涵盖${module.title}的所有概念。测试应用和分析能力。`,
       keyPoints: module.topics.slice(0, 6),
+      bloomsLevel: moduleLevel,
       quizConfig: {
         questionCount: Math.min(12, Math.max(8, module.topics.length * 2)),
         difficulty,
         questionTypes: quiz2QuestionTypes,
+        bloomsRange: comprehensive,
       },
     }),
   );
 
-  // ── 8. Module summary slide ────────────────────────────────────────────
+  // ── 8. Module summary slide (module target level — synthesis) ─────────
   outlines.push(
     makeOutline(module, moduleIndex, language, {
       type: 'slide',
-      title: isEn
-        ? `${module.title} — Summary & Next Steps`
-        : `${module.title} — 总结与下一步`,
+      title: isEn ? `${module.title} — Summary & Next Steps` : `${module.title} — 总结与下一步`,
       description: isEn
         ? `Recap key takeaways from ${module.title}, review learning outcomes achieved, and preview what's coming next`
         : `回顾${module.title}的关键要点，检查学习目标达成情况，预览下一步内容`,
       keyPoints: module.learningObjectives.slice(0, 4),
+      bloomsLevel: moduleLevel,
     }),
   );
 
@@ -335,9 +357,16 @@ async function expandModuleWithAI(
   syllabus: CourseSyllabus,
   language: 'zh-CN' | 'en-US',
   aiCall: AICallFn,
+  courseRange?: BloomsRange,
 ): Promise<SceneOutline[]> {
   const totalModules = syllabus.modules.length;
   const difficulty = getModuleDifficulty(moduleIndex, totalModules);
+
+  // Bloom's targeting for this module
+  const moduleLevel: BloomsLevel =
+    module.bloomsLevel ?? getModuleBloomsLevel(moduleIndex, totalModules, courseRange);
+  const moduleRange: BloomsRange = getModuleBloomsRange(moduleIndex, totalModules, courseRange);
+  const { formative, comprehensive } = splitQuizRanges(moduleRange);
 
   // Format topics list
   const moduleTopics =
@@ -363,10 +392,13 @@ async function expandModuleWithAI(
     })
     .join('\n');
 
-  // Format assessment strategy
+  // Format assessment strategy (includes bloomsLevel when present)
   const assessmentStrategy = syllabus.assessmentStrategy?.components?.length
     ? syllabus.assessmentStrategy.components
-        .map((c) => `- ${c.name} (${c.weight}%): ${c.description}`)
+        .map((c) => {
+          const bloomsNote = c.bloomsLevel ? `, Bloom's: ${c.bloomsLevel}` : '';
+          return `- ${c.name} (${c.weight}%${bloomsNote}): ${c.description}`;
+        })
         .join('\n')
     : 'No assessment strategy provided';
 
@@ -385,13 +417,16 @@ async function expandModuleWithAI(
       modulePosition,
       difficulty,
       language,
+      moduleBloomsLevel: moduleLevel,
+      moduleBloomsRangeMin: moduleRange.min,
+      moduleBloomsRangeMax: moduleRange.max,
     });
 
     if (!prompts) {
       log.warn(
         '[outline-generator] Module-to-outlines prompt template not found, using deterministic fallback',
       );
-      return expandModuleDeterministic(module, moduleIndex, totalModules, language);
+      return expandModuleDeterministic(module, moduleIndex, totalModules, language, courseRange);
     }
 
     const response = await aiCall(prompts.system, prompts.user);
@@ -401,22 +436,49 @@ async function expandModuleWithAI(
       log.warn(
         `[outline-generator] Failed to parse AI response for module "${module.title}", using deterministic fallback`,
       );
-      return expandModuleDeterministic(module, moduleIndex, totalModules, language);
+      return expandModuleDeterministic(module, moduleIndex, totalModules, language, courseRange);
     }
 
-    // Inject module context and generate unique IDs
-    const enriched = parsed.map((outline) => ({
-      ...outline,
-      id: nanoid(),
-      language,
-      moduleId: module.id,
-      moduleTitle: module.title,
-      moduleIndex,
-      order: 0, // Placeholder — caller assigns final order
-    }));
+    // Track quiz index so we can assign formative vs comprehensive ranges when missing
+    let quizIndex = 0;
+
+    // Inject module context, validate Bloom's, and generate unique IDs
+    const enriched = parsed.map((outline) => {
+      // Coerce + validate the AI's bloomsLevel; fall back to module target
+      const aiLevel = coerceBloomsLevel((outline as { bloomsLevel?: unknown }).bloomsLevel);
+      const bloomsLevel: BloomsLevel = aiLevel ?? moduleLevel;
+
+      // For quiz outlines, ensure quizConfig.bloomsRange is set
+      let quizConfig = outline.quizConfig;
+      if (outline.type === 'quiz') {
+        const aiRange = coerceBloomsRange(
+          (outline.quizConfig as { bloomsRange?: unknown })?.bloomsRange,
+        );
+        const defaultRange = quizIndex === 0 ? formative : comprehensive;
+        quizIndex += 1;
+        quizConfig = {
+          questionCount: outline.quizConfig?.questionCount ?? 6,
+          difficulty: outline.quizConfig?.difficulty ?? difficulty,
+          questionTypes: outline.quizConfig?.questionTypes ?? ['single', 'multiple'],
+          bloomsRange: aiRange ?? defaultRange,
+        };
+      }
+
+      return {
+        ...outline,
+        id: nanoid(),
+        language,
+        moduleId: module.id,
+        moduleTitle: module.title,
+        moduleIndex,
+        order: 0, // Placeholder — caller assigns final order
+        bloomsLevel,
+        ...(quizConfig ? { quizConfig } : {}),
+      };
+    });
 
     log.info(
-      `[outline-generator] AI expanded module "${module.title}" into ${enriched.length} scenes`,
+      `[outline-generator] AI expanded module "${module.title}" into ${enriched.length} scenes (Bloom's target: ${moduleLevel}, range: ${moduleRange.min}-${moduleRange.max})`,
     );
     return enriched;
   } catch (err) {
@@ -424,7 +486,7 @@ async function expandModuleWithAI(
       `[outline-generator] AI expansion failed for module "${module.title}", using deterministic fallback:`,
       err,
     );
-    return expandModuleDeterministic(module, moduleIndex, totalModules, language);
+    return expandModuleDeterministic(module, moduleIndex, totalModules, language, courseRange);
   }
 }
 
@@ -442,8 +504,9 @@ export function syllabusToOutlines(
 ): SceneOutline[] {
   const outlines: SceneOutline[] = [];
   const totalModules = syllabus.modules.length;
+  const courseRange = syllabus.bloomsRange;
 
-  // Opening slide — course introduction
+  // Opening slide — course introduction (foundational, lower end of range)
   outlines.push({
     id: nanoid(),
     type: 'slide',
@@ -455,12 +518,13 @@ export function syllabusToOutlines(
     moduleId: '__course_intro__',
     moduleTitle: syllabus.title,
     moduleIndex: -1,
+    bloomsLevel: courseRange?.min ?? 'remember',
   });
 
   // Expand each module into multiple scenes
   for (let i = 0; i < syllabus.modules.length; i++) {
     const mod = syllabus.modules[i];
-    const moduleOutlines = expandModuleDeterministic(mod, i, totalModules, language);
+    const moduleOutlines = expandModuleDeterministic(mod, i, totalModules, language, courseRange);
 
     // Assign sequential order numbers
     for (const outline of moduleOutlines) {
@@ -469,7 +533,7 @@ export function syllabusToOutlines(
     }
   }
 
-  // Closing slide — summary & next steps
+  // Closing slide — summary & next steps (synthesis, upper end of range)
   outlines.push({
     id: nanoid(),
     type: 'slide',
@@ -482,6 +546,7 @@ export function syllabusToOutlines(
     moduleId: '__course_summary__',
     moduleTitle: 'Course Summary & Next Steps',
     moduleIndex: syllabus.modules.length,
+    bloomsLevel: courseRange?.max ?? 'evaluate',
   });
 
   return outlines;
@@ -501,8 +566,9 @@ export async function syllabusToOutlinesWithAI(
   aiCall: AICallFn,
 ): Promise<SceneOutline[]> {
   const outlines: SceneOutline[] = [];
+  const courseRange = syllabus.bloomsRange;
 
-  // Opening slide — course introduction
+  // Opening slide — course introduction (foundational, lower end of range)
   outlines.push({
     id: nanoid(),
     type: 'slide',
@@ -514,6 +580,7 @@ export async function syllabusToOutlinesWithAI(
     moduleId: '__course_intro__',
     moduleTitle: syllabus.title,
     moduleIndex: -1,
+    bloomsLevel: courseRange?.min ?? 'remember',
   });
 
   // Expand each module sequentially with AI
@@ -523,7 +590,14 @@ export async function syllabusToOutlinesWithAI(
       `[outline-generator] Expanding module ${i + 1}/${syllabus.modules.length}: "${mod.title}"`,
     );
 
-    const moduleOutlines = await expandModuleWithAI(mod, i, syllabus, language, aiCall);
+    const moduleOutlines = await expandModuleWithAI(
+      mod,
+      i,
+      syllabus,
+      language,
+      aiCall,
+      courseRange,
+    );
 
     // Assign sequential order numbers
     for (const outline of moduleOutlines) {
@@ -532,7 +606,7 @@ export async function syllabusToOutlinesWithAI(
     }
   }
 
-  // Closing slide — summary & next steps
+  // Closing slide — summary & next steps (synthesis, upper end of range)
   outlines.push({
     id: nanoid(),
     type: 'slide',
@@ -545,6 +619,7 @@ export async function syllabusToOutlinesWithAI(
     moduleId: '__course_summary__',
     moduleTitle: 'Course Summary & Next Steps',
     moduleIndex: syllabus.modules.length,
+    bloomsLevel: courseRange?.max ?? 'evaluate',
   });
 
   // Uniquify media element IDs across the entire outline list

@@ -2,6 +2,10 @@
 import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
+import type { BloomsLevel } from './blooms';
+
+// Re-export Bloom's types so consumers of stage types get them transparently
+export type { BloomsLevel, BloomsRange } from './blooms';
 
 export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl' | 'assignment';
 
@@ -73,6 +77,9 @@ export interface Scene {
   moduleTitle?: string; // e.g., "Module 3: Data Structures"
   moduleIndex?: number; // 0-based index into syllabus.modules[]
 
+  /** Bloom's cognitive level this scene targets. */
+  bloomsLevel?: BloomsLevel;
+
   // Metadata
   createdAt?: number;
   updatedAt?: number;
@@ -120,6 +127,10 @@ export interface QuizQuestion {
   commentPrompt?: string; // Grading guidance for text questions
   hasAnswer?: boolean; // Whether auto-grading is possible
   points?: number; // Points per question (default 1)
+  /** Bloom's cognitive level this question targets. */
+  bloomsLevel?: BloomsLevel;
+  /** The action verb used in the question stem (e.g., "identify", "analyze"). */
+  bloomsVerb?: string;
 }
 
 /**
@@ -170,6 +181,8 @@ export interface RubricCriterion {
   description: string; // What this criterion evaluates
   weight: number; // Percentage weight (all criteria sum to 100)
   levels: RubricLevel[]; // Performance levels, ordered best to worst
+  /** Bloom's cognitive level this criterion assesses. */
+  bloomsLevel?: BloomsLevel;
 }
 
 export interface RubricLevel {

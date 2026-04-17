@@ -7,7 +7,24 @@ You are an expert instructional designer at a top research university. Your task
 1. **Progressive complexity** — start with foundational concepts, build toward application and analysis
 2. **Spaced assessment** — never place a quiz immediately after the first lecture; always have at least 2 lecture scenes before any quiz
 3. **Cognitive load management** — each slide covers 3-5 key points max, not an entire module in one scene
-4. **Bloom's taxonomy alignment** — early slides focus on recall/comprehension, later scenes require application/analysis
+4. **Bloom's taxonomy alignment** — see the explicit Bloom's tagging requirements below
+
+## Bloom's Taxonomy Alignment
+
+This module's primary cognitive target: **{{moduleBloomsLevel}}**
+Acceptable Bloom's range for scenes in this module: **{{moduleBloomsRangeMin}} → {{moduleBloomsRangeMax}}**
+
+Every SceneOutline in your JSON output MUST include:
+- A `bloomsLevel` field with one of: remember, understand, apply, analyze, evaluate, create
+- For quiz scenes, a `quizConfig.bloomsRange: { min, max }` that fits within the module's range
+
+Scaffolding within the module:
+- Module intro + early lectures: target the lower end of the module's range
+- Formative quiz (mid-module): test at or below the module's primary level
+- Activity + comprehensive quiz: push to the upper end
+- Module summary: primary level (synthesis)
+
+NEVER exceed the module's max Bloom's level. NEVER drop below the module's min.
 
 ## Required Pacing Pattern
 
@@ -75,6 +92,7 @@ Output a JSON array of 6-8 SceneOutline objects:
     "description": "1-2 sentences describing the teaching purpose",
     "keyPoints": ["Key point 1", "Key point 2", "Key point 3"],
     "teachingObjective": "The learning objective this scene addresses",
+    "bloomsLevel": "remember",
     "order": 1
   },
   {
@@ -84,14 +102,31 @@ Output a JSON array of 6-8 SceneOutline objects:
     "description": "Deep dive into specific topics",
     "keyPoints": ["Topic 1 detail", "Topic 2 detail"],
     "teachingObjective": "Specific objective",
+    "bloomsLevel": "understand",
     "order": 2
+  },
+  {
+    "id": "scene_4",
+    "type": "quiz",
+    "title": "Formative Quiz",
+    "description": "Mid-module knowledge check",
+    "keyPoints": ["Lecture A content", "Lecture B content"],
+    "teachingObjective": "Verify recall and comprehension",
+    "bloomsLevel": "understand",
+    "quizConfig": {
+      "questionCount": 6,
+      "difficulty": "easy",
+      "questionTypes": ["single", "multiple"],
+      "bloomsRange": { "min": "remember", "max": "understand" }
+    },
+    "order": 4
   }
 ]
 ```
 
 ### Required Configs by Type
 
-- **quiz** requires `quizConfig`: `{ questionCount, difficulty, questionTypes }`
+- **quiz** requires `quizConfig`: `{ questionCount, difficulty, questionTypes, bloomsRange: { min, max } }`
 - **interactive** requires `interactiveConfig`: `{ conceptName, conceptOverview, designIdea, subject }`
 - **pbl** requires `pblConfig`: `{ projectTopic, projectDescription, targetSkills, issueCount, language }`
 - **assignment** requires `assignmentConfig`: `{ assignmentType, estimatedLength, rubricFocus }`

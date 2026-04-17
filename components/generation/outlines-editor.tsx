@@ -15,6 +15,9 @@ import {
 import { Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import type { SceneOutline } from '@/lib/types/generation';
+import { BloomsBadge } from '@/components/ui/blooms-badge';
+import { BloomsLevelSelect } from '@/components/ui/blooms-level-select';
+import { BloomsRangeSelect } from '@/components/ui/blooms-range-select';
 
 interface OutlinesEditorProps {
   outlines: SceneOutline[];
@@ -130,6 +133,7 @@ export function OutlinesEditor({
                       className="flex-1"
                       disabled={isLoading}
                     />
+                    {outline.bloomsLevel && <BloomsBadge level={outline.bloomsLevel} size="sm" />}
                   </CardTitle>
                 </div>
                 <Select
@@ -182,9 +186,37 @@ export function OutlinesEditor({
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label>Bloom&apos;s Level</Label>
+                <div className="max-w-xs">
+                  <BloomsLevelSelect
+                    value={outline.bloomsLevel}
+                    onChange={(level) => updateOutline(index, { bloomsLevel: level })}
+                    allowUnset
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
               {outline.type === 'quiz' && (
                 <div className="p-3 bg-muted/50 rounded-lg space-y-3">
                   <Label className="text-sm font-medium">测验配置</Label>
+                  <BloomsRangeSelect
+                    label="Quiz Bloom's Range"
+                    value={outline.quizConfig?.bloomsRange}
+                    onChange={(range) =>
+                      updateOutline(index, {
+                        quizConfig: {
+                          questionCount: outline.quizConfig?.questionCount || 3,
+                          difficulty: outline.quizConfig?.difficulty || 'medium',
+                          questionTypes: outline.quizConfig?.questionTypes || ['single'],
+                          ...outline.quizConfig,
+                          bloomsRange: range,
+                        },
+                      })
+                    }
+                    disabled={isLoading}
+                  />
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">题目数量</Label>

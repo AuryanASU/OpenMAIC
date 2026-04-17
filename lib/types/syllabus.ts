@@ -5,6 +5,8 @@
  * from a topic or parsed from an uploaded PDF.
  */
 
+import type { BloomsLevel, BloomsRange } from './blooms';
+
 export interface CourseSyllabus {
   id: string;
   title: string; // e.g., "Introduction to Data Science"
@@ -15,10 +17,17 @@ export interface CourseSyllabus {
   learningOutcomes: string[]; // High-level outcomes (4-8 items)
   learningObjectives: string[]; // Specific, measurable objectives
 
+  /** Parallel arrays indexing the Bloom's level of each outcome/objective. */
+  learningOutcomesBloom?: BloomsLevel[];
+  learningObjectivesBloom?: BloomsLevel[];
+
+  /** Course-level Bloom's target range (e.g., introductory → Remember-Apply). */
+  bloomsRange?: BloomsRange;
+
   modules: CourseModule[]; // The structured course content
 
   assessmentStrategy?: {
-    components: { name: string; weight: number; description: string }[];
+    components: AssessmentComponent[];
   };
 
   estimatedDuration?: string; // e.g., "7 weeks", "16 weeks"
@@ -30,7 +39,17 @@ export interface CourseSyllabus {
     updatedAt: string;
     source: 'generated' | 'uploaded' | 'edited';
     originalFileName?: string;
+    /** True when Bloom's levels were inferred from uploaded content rather than user-specified. */
+    bloomsInferred?: boolean;
   };
+}
+
+export interface AssessmentComponent {
+  name: string;
+  weight: number;
+  description: string;
+  /** Primary Bloom's level this assessment targets. */
+  bloomsLevel?: BloomsLevel;
 }
 
 export interface CourseModule {
@@ -40,6 +59,10 @@ export interface CourseModule {
   description: string;
   topics: string[]; // Key topics covered
   learningObjectives: string[]; // Module-level objectives
+  /** Parallel array: Bloom's level of each learning objective above. */
+  learningObjectivesBloom?: BloomsLevel[];
+  /** Primary Bloom's cognitive target for this module. */
+  bloomsLevel?: BloomsLevel;
   estimatedWeeks?: number;
   sceneTypes?: ('slide' | 'quiz' | 'interactive' | 'pbl' | 'assignment')[];
 }

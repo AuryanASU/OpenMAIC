@@ -17,6 +17,7 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import { createLogger } from '@/lib/logger';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
+import { BloomsBadge } from '@/components/ui/blooms-badge';
 
 import type { AssignmentContent, Rubric, RubricCriterion } from '@/lib/types/stage';
 
@@ -309,7 +310,12 @@ function RubricTable({
               >
                 <td className="px-4 py-3 align-top">
                   <p className="font-medium text-gray-700 dark:text-gray-200">{criterion.name}</p>
-                  <p className="text-gray-400 dark:text-gray-500 mt-0.5">{criterion.weight}%</p>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span className="text-gray-400 dark:text-gray-500">{criterion.weight}%</span>
+                    {criterion.bloomsLevel && (
+                      <BloomsBadge level={criterion.bloomsLevel} size="sm" variant="muted" />
+                    )}
+                  </div>
                 </td>
                 {criterion.levels.map((level) => {
                   const isHighlighted = highlightResults?.get(criterion.id) === level.label;

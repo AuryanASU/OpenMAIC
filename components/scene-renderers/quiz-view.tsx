@@ -21,6 +21,7 @@ const log = createLogger('QuizView');
 import type { QuizQuestion } from '@/lib/types/stage';
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
+import { BloomsBadge } from '@/components/ui/blooms-badge';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -545,15 +546,25 @@ function QuestionCard({
             <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-relaxed">
               {question.question}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {question.type === 'single'
-                ? t('quiz.singleChoice')
-                : question.type === 'multiple'
-                  ? t('quiz.multipleChoice')
-                  : t('quiz.shortAnswer')}
-              {' · '}
-              {pts} {t('quiz.pointsSuffix')}
-            </p>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <p className="text-xs text-gray-400">
+                {question.type === 'single'
+                  ? t('quiz.singleChoice')
+                  : question.type === 'multiple'
+                    ? t('quiz.multipleChoice')
+                    : t('quiz.shortAnswer')}
+                {' · '}
+                {pts} {t('quiz.pointsSuffix')}
+              </p>
+              {question.bloomsLevel && (
+                <BloomsBadge level={question.bloomsLevel} size="sm" variant="muted" />
+              )}
+              {question.bloomsVerb && (
+                <span className="text-[11px] italic text-gray-400 dark:text-gray-500">
+                  {question.bloomsVerb}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         {isReview && (

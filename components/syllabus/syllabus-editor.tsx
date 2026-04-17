@@ -34,9 +34,13 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BloomsBadge } from '@/components/ui/blooms-badge';
+import { BloomsLevelSelect } from '@/components/ui/blooms-level-select';
+import { BloomsRangeSelect } from '@/components/ui/blooms-range-select';
 import { cn } from '@/lib/utils';
 import { useSyllabusStore } from '@/lib/store/syllabus';
 import type { CourseSyllabus, CourseModule } from '@/lib/types/syllabus';
+import type { BloomsLevel } from '@/lib/types/blooms';
 import { jsonrepair } from 'jsonrepair';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -197,6 +201,99 @@ function EditableList({
   );
 }
 
+// ── Editable list with Bloom's level per item ──────────────────────────────
+
+function EditableBloomsList({
+  items,
+  blooms,
+  onChangeItems,
+  onChangeBlooms,
+  placeholder = 'Add item…',
+}: {
+  items: string[];
+  blooms: (BloomsLevel | undefined)[];
+  onChangeItems: (items: string[]) => void;
+  onChangeBlooms: (blooms: (BloomsLevel | undefined)[]) => void;
+  placeholder?: string;
+}) {
+  const [newItem, setNewItem] = useState('');
+
+  // Ensure blooms array is same length as items for indexing
+  const paddedBlooms = [...blooms];
+  while (paddedBlooms.length < items.length) paddedBlooms.push(undefined);
+
+  const update = (idx: number, val: string) => {
+    const next = [...items];
+    next[idx] = val;
+    onChangeItems(next);
+  };
+
+  const remove = (idx: number) => {
+    onChangeItems(items.filter((_, i) => i !== idx));
+    onChangeBlooms(paddedBlooms.filter((_, i) => i !== idx));
+  };
+
+  const updateBloom = (idx: number, level: BloomsLevel | undefined) => {
+    const next = [...paddedBlooms];
+    next[idx] = level;
+    onChangeBlooms(next);
+  };
+
+  const add = () => {
+    const trimmed = newItem.trim();
+    if (!trimmed) return;
+    onChangeItems([...items, trimmed]);
+    onChangeBlooms([...paddedBlooms, undefined]);
+    setNewItem('');
+  };
+
+  return (
+    <div className="space-y-1.5">
+      {items.map((item, idx) => (
+        <div key={idx} className="flex items-start gap-2 group">
+          <span className="mt-1.5 size-1.5 rounded-full bg-[#8C1D40]/40 dark:bg-[#C75B7A]/40 shrink-0" />
+          <EditableText
+            value={item}
+            onChange={(v) => update(idx, v)}
+            className="flex-1 text-sm leading-relaxed"
+          />
+          <div className="shrink-0 w-40">
+            <BloomsLevelSelect
+              value={paddedBlooms[idx]}
+              onChange={(level) => updateBloom(idx, level)}
+              allowUnset
+              placeholder="Bloom's…"
+              className="h-7 text-xs"
+            />
+          </div>
+          <button
+            onClick={() => remove(idx)}
+            className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-destructive transition-opacity mt-0.5"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2 mt-2">
+        <input
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder={placeholder}
+          className="flex-1 text-sm bg-transparent border-b border-dashed border-border/50 focus:border-[#8C1D40]/40 focus:outline-none placeholder:text-muted-foreground/30 py-0.5"
+        />
+        <button
+          onClick={add}
+          disabled={!newItem.trim()}
+          className="text-[#8C1D40] dark:text-[#C75B7A] disabled:opacity-30 hover:opacity-70 transition-opacity"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Module card ────────────────────────────────────────────────────────────
 
 function ModuleCard({
@@ -236,12 +333,13 @@ function ModuleCard({
         <div className="size-7 rounded-lg bg-[#8C1D40]/10 dark:bg-[#8C1D40]/20 text-[#8C1D40] dark:text-[#C75B7A] flex items-center justify-center text-xs font-bold shrink-0">
           {module.order}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
           <EditableText
             value={module.title}
             onChange={(v) => onUpdate({ title: v })}
             className="font-medium text-sm"
           />
+          {module.bloomsLevel && <BloomsBadge level={module.bloomsLevel} size="sm" showVerbHint />}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {module.sceneTypes?.slice(0, 2).map((t) => (
@@ -316,11 +414,28 @@ function ModuleCard({
               </div>
               <div>
                 <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wide mb-1.5">
+                  Module Bloom's Target
+                </p>
+                <BloomsLevelSelect
+                  value={module.bloomsLevel}
+                  onChange={(level) => onUpdate({ bloomsLevel: level })}
+                  allowUnset
+                  className="max-w-xs"
+                />
+              </div>
+              <div>
+                <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wide mb-1.5">
                   Learning Objectives
                 </p>
-                <EditableList
+                <EditableBloomsList
                   items={module.learningObjectives}
-                  onChange={(v) => onUpdate({ learningObjectives: v })}
+                  blooms={module.learningObjectivesBloom ?? []}
+                  onChangeItems={(v) => onUpdate({ learningObjectives: v })}
+                  onChangeBlooms={(v) =>
+                    onUpdate({
+                      learningObjectivesBloom: v as BloomsLevel[],
+                    })
+                  }
                   placeholder="Add learning objective…"
                 />
               </div>
@@ -752,12 +867,24 @@ export function SyllabusEditor({ onGenerate, onClose }: SyllabusEditorProps) {
                   </div>
                 )}
 
+                {/* Course Bloom's Range */}
+                <div>
+                  <SectionHeader icon={BarChart3} title="Course Bloom's Range" />
+                  <BloomsRangeSelect
+                    label="Target cognitive depth across the course"
+                    value={syllabus.bloomsRange}
+                    onChange={(range) => updateField('bloomsRange', range)}
+                  />
+                </div>
+
                 {/* Learning Outcomes */}
                 <div>
                   <SectionHeader icon={GraduationCap} title="Learning Outcomes" />
-                  <EditableList
+                  <EditableBloomsList
                     items={syllabus.learningOutcomes}
-                    onChange={(v) => updateField('learningOutcomes', v)}
+                    blooms={syllabus.learningOutcomesBloom ?? []}
+                    onChangeItems={(v) => updateField('learningOutcomes', v)}
+                    onChangeBlooms={(v) => updateField('learningOutcomesBloom', v as BloomsLevel[])}
                     placeholder="Add learning outcome…"
                   />
                 </div>
@@ -765,9 +892,13 @@ export function SyllabusEditor({ onGenerate, onClose }: SyllabusEditorProps) {
                 {/* Learning Objectives */}
                 <div>
                   <SectionHeader icon={Target} title="Learning Objectives" />
-                  <EditableList
+                  <EditableBloomsList
                     items={syllabus.learningObjectives}
-                    onChange={(v) => updateField('learningObjectives', v)}
+                    blooms={syllabus.learningObjectivesBloom ?? []}
+                    onChangeItems={(v) => updateField('learningObjectives', v)}
+                    onChangeBlooms={(v) =>
+                      updateField('learningObjectivesBloom', v as BloomsLevel[])
+                    }
                     placeholder="Add learning objective…"
                   />
                 </div>
@@ -826,10 +957,31 @@ export function SyllabusEditor({ onGenerate, onClose }: SyllabusEditorProps) {
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm">{comp.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm">{comp.name}</p>
+                            {comp.bloomsLevel && <BloomsBadge level={comp.bloomsLevel} size="sm" />}
+                          </div>
                           <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
                             {comp.description}
                           </p>
+                          <div className="mt-2 max-w-xs">
+                            <BloomsLevelSelect
+                              value={comp.bloomsLevel}
+                              onChange={(level) => {
+                                const strategy = syllabus.assessmentStrategy;
+                                if (!strategy) return;
+                                const nextComponents = strategy.components.map((c, i) =>
+                                  i === idx ? { ...c, bloomsLevel: level } : c,
+                                );
+                                updateField('assessmentStrategy', {
+                                  ...strategy,
+                                  components: nextComponents,
+                                });
+                              }}
+                              allowUnset
+                              placeholder="Bloom's level…"
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}

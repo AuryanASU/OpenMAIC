@@ -7,6 +7,7 @@
 
 import type { ActionType } from './action';
 import type { MediaGenerationRequest } from '@/lib/media/types';
+import type { BloomsLevel, BloomsRange } from './blooms';
 
 // ==================== PDF Image Types ====================
 
@@ -110,6 +111,8 @@ export interface SceneOutline {
     questionCount: number;
     difficulty: 'easy' | 'medium' | 'hard';
     questionTypes: ('single' | 'multiple' | 'text')[];
+    /** Bloom's cognitive range for this quiz's questions. */
+    bloomsRange?: BloomsRange;
   };
   // Interactive-specific config
   interactiveConfig?: {
@@ -136,6 +139,8 @@ export interface SceneOutline {
   moduleId?: string; // ID of the parent CourseModule
   moduleTitle?: string; // e.g., "Module 3: Data Structures"
   moduleIndex?: number; // 0-based index into syllabus.modules[]
+  /** Bloom's cognitive level this scene targets. */
+  bloomsLevel?: BloomsLevel;
 }
 
 // ==================== Stage 3 Output: Generated Content ====================
@@ -185,6 +190,8 @@ export interface GeneratedAssignmentContent {
       name: string;
       description: string;
       weight: number;
+      /** Bloom's cognitive level this criterion assesses. */
+      bloomsLevel?: BloomsLevel;
       levels: Array<{
         label: string;
         points: number;
